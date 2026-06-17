@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings } from "lucide-react";
+import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3 } from "lucide-react";
 
 // Themes configuration
 const THEMES = {
@@ -24,8 +24,9 @@ export default function App() {
   const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem("aist-tts-font-size") || "11"));
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("aist-tts-active-tab") || "voice");
 
-  // Collapsible state (default to true/collapsed)
+  // Collapsible states (default to collapsed)
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
 
   const [textToRead, setTextToRead] = useState("");
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -244,18 +245,11 @@ export default function App() {
       <div className="panel-content">
         {activeTab === "voice" ? (
           <div className="tab-pane">
-            {/* Input area - stretches to fill available height */}
-            <div className="text-area-container">
-              <label className="field-label">
-                読み上げテキスト
-              </label>
-              <textarea
-                value={textToRead}
-                onChange={(e) => setTextToRead(e.target.value)}
-                placeholder="ここにテキストを入力するか、下の「クリップボードを読み上げる」を押してください..."
-                className="textarea-field"
-              />
-            </div>
+            {/* Quick clipboard button - Always visible at the top */}
+            <button onClick={readClipboard} className="btn-primary">
+              <Clipboard size={14} />
+              📋 クリップボードを読み上げる
+            </button>
 
             {/* Actions grid (Play, Pause, Stop) - Always Visible */}
             <div className="actions-strip">
@@ -284,7 +278,42 @@ export default function App() {
               </button>
             </div>
 
-            {/* Collapsible toggle button */}
+            {/* Textarea collapse toggle */}
+            <button
+              onClick={() => setIsTextareaExpanded(!isTextareaExpanded)}
+              className="btn-action"
+              style={{
+                width: "100%",
+                marginTop: "4px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                borderStyle: "dashed",
+                borderColor: "var(--border-btn-secondary)"
+              }}
+            >
+              <Edit3 size={11} />
+              {isTextareaExpanded ? "✏️ テキスト入力欄を閉じる" : "✏️ テキスト入力欄を展開"}
+              {isTextareaExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+
+            {/* Input area - stretches to fill available height when expanded */}
+            {isTextareaExpanded && (
+              <div className="text-area-container">
+                <label className="field-label">
+                  読み上げテキスト
+                </label>
+                <textarea
+                  value={textToRead}
+                  onChange={(e) => setTextToRead(e.target.value)}
+                  placeholder="ここにテキストを入力するか、貼り付けて再生してください..."
+                  className="textarea-field"
+                />
+              </div>
+            )}
+
+            {/* Collapsible settings toggle button */}
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="btn-action"
@@ -300,19 +329,13 @@ export default function App() {
               }}
             >
               <Settings size={11} />
-              {isCollapsed ? "⚙️ 詳細設定を展開 (ボイス・話速・クリップボード)" : "⚙️ 詳細設定を閉じる"}
+              {isCollapsed ? "⚙️ 詳細設定を展開 (ボイス・話速)" : "⚙️ 詳細設定を閉じる"}
               {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
             </button>
 
             {/* Collapsible Content Section */}
             {!isCollapsed && (
               <div className="space-y-4" style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
-                {/* Quick clipboard button */}
-                <button onClick={readClipboard} className="btn-primary">
-                  <Clipboard size={14} />
-                  📋 クリップボードを読み上げる
-                </button>
-
                 {/* Settings controls */}
                 <div className="settings-grid" style={{ paddingTop: "12px" }}>
                   {/* Voice select */}

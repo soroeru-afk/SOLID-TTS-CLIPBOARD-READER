@@ -162,9 +162,9 @@ body {
 /* Application Layout Classes */
 .app-card {
   width: 100%;
-  max-width: 700px;
-  height: 90vh;
-  min-height: 500px;
+  max-width: 500px;
+  height: auto;
+  max-height: 95vh;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-app);
