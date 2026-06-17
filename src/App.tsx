@@ -32,9 +32,27 @@ export default function App() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceIdx, setSelectedVoiceIdx] = useState<number>(0);
   
-  const [speed, setSpeed] = useState(() => parseFloat(localStorage.getItem("aist-tts-speed") || "1.2"));
-  const [pitch, setPitch] = useState(() => parseFloat(localStorage.getItem("aist-tts-pitch") || "1.0"));
-  const [volume, setVolume] = useState(() => parseInt(localStorage.getItem("aist-tts-volume") || "80"));
+  // Presets state
+  const [currentPreset, setCurrentPreset] = useState(() => localStorage.getItem("aist-tts-preset-active") || "A");
+  const [presetALabel, setPresetALabel] = useState(() => localStorage.getItem("aist-tts-preset-a-label") || "ボイス A");
+  const [presetBLabel, setPresetBLabel] = useState(() => localStorage.getItem("aist-tts-preset-b-label") || "ボイス B");
+
+  // Temporary local state for sliders that syncs with current preset
+  const [speed, setSpeed] = useState(() => {
+    const active = localStorage.getItem("aist-tts-preset-active") || "A";
+    const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
+    return parseFloat(localStorage.getItem(prefix + "speed") || "1.2");
+  });
+  const [pitch, setPitch] = useState(() => {
+    const active = localStorage.getItem("aist-tts-preset-active") || "A";
+    const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
+    return parseFloat(localStorage.getItem(prefix + "pitch") || "1.0");
+  });
+  const [volume, setVolume] = useState(() => {
+    const active = localStorage.getItem("aist-tts-preset-active") || "A";
+    const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
+    return parseInt(localStorage.getItem(prefix + "volume") || "80");
+  });
 
   const [status, setStatus] = useState("待機中");
   const [isPaused, setIsPaused] = useState(false);
@@ -68,10 +86,37 @@ export default function App() {
     localStorage.setItem("aist-tts-active-tab", activeTab);
   }, [activeTab]);
 
-  // Save sliders configuration
-  useEffect(() => { localStorage.setItem("aist-tts-speed", String(speed)); }, [speed]);
-  useEffect(() => { localStorage.setItem("aist-tts-pitch", String(pitch)); }, [pitch]);
-  useEffect(() => { localStorage.setItem("aist-tts-volume", String(volume)); }, [volume]);
+  // Save active preset settings when sliders change
+  useEffect(() => {
+    const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
+    localStorage.setItem(prefix + "speed", String(speed));
+  }, [speed, currentPreset]);
+
+  useEffect(() => {
+    const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
+    localStorage.setItem(prefix + "pitch", String(pitch));
+  }, [pitch, currentPreset]);
+
+  useEffect(() => {
+    const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
+    localStorage.setItem(prefix + "volume", String(volume));
+  }, [volume, currentPreset]);
+
+  useEffect(() => {
+    localStorage.setItem("aist-tts-preset-a-label", presetALabel);
+  }, [presetALabel]);
+
+  useEffect(() => {
+    localStorage.setItem("aist-tts-preset-b-label", presetBLabel);
+  }, [presetBLabel]);
+
+  // Sync selected voice name to preset
+  useEffect(() => {
+    if (voices[selectedVoiceIdx]) {
+      const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
+      localStorage.setItem(prefix + "voice", voices[selectedVoiceIdx].name);
+    }
+  }, [selectedVoiceIdx, voices, currentPreset]);
 
   // Load voices list
   useEffect(() => {
@@ -81,9 +126,21 @@ export default function App() {
       if (!jaVoices.length) jaVoices = all;
       setVoices(jaVoices);
 
-      const savedName = localStorage.getItem("aist-tts-voice-name") || "";
-      const idx = jaVoices.findIndex(v => v.name === savedName);
-      if (idx >= 0) setSelectedVoiceIdx(idx);
+      const active = localStorage.getItem("aist-tts-preset-active") || "A";
+      const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
+      const savedName = localStorage.getItem(prefix + "voice") || "";
+      let idx = jaVoices.findIndex(v => v.name === savedName);
+      
+      if (idx < 0 && !savedName) {
+        // Fallback defaults for Ichiro / Haruka
+        if (active === "A") {
+          idx = jaVoices.findIndex(v => /haruka/i.test(v.name));
+        } else {
+          idx = jaVoices.findIndex(v => /ichiro/i.test(v.name));
+        }
+      }
+      if (idx < 0) idx = 0;
+      setSelectedVoiceIdx(idx);
     };
 
     if (window.speechSynthesis.getVoices().length === 0) {
@@ -97,13 +154,51 @@ export default function App() {
     };
   }, []);
 
+  const switchPreset = (presetName: string) => {
+    // Save current parameters to the active preset before switching
+    const prefixOld = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
+    localStorage.setItem(prefixOld + "speed", String(speed));
+    localStorage.setItem(prefixOld + "pitch", String(pitch));
+    localStorage.setItem(prefixOld + "volume", String(volume));
+    if (voices[selectedVoiceIdx]) {
+      localStorage.setItem(prefixOld + "voice", voices[selectedVoiceIdx].name);
+    }
+
+    // Switch active state
+    setCurrentPreset(presetName);
+    localStorage.setItem("aist-tts-preset-active", presetName);
+
+    // Load new preset parameters
+    const prefixNew = `aist-tts-preset-${presetName.toLowerCase()}-`;
+    const newSpeed = parseFloat(localStorage.getItem(prefixNew + "speed") || "1.2");
+    const newPitch = parseFloat(localStorage.getItem(prefixNew + "pitch") || "1.0");
+    const newVolume = parseInt(localStorage.getItem(prefixNew + "volume") || "80");
+    const newVoiceName = localStorage.getItem(prefixNew + "voice") || "";
+
+    setSpeed(newSpeed);
+    setPitch(newPitch);
+    setVolume(newVolume);
+
+    if (newVoiceName) {
+      const idx = voices.findIndex(v => v.name === newVoiceName);
+      if (idx >= 0) {
+        setSelectedVoiceIdx(idx);
+      }
+    } else {
+      // Defaults fallback
+      let idx = -1;
+      if (presetName === "A") {
+        idx = voices.findIndex(v => /haruka/i.test(v.name));
+      } else {
+        idx = voices.findIndex(v => /ichiro/i.test(v.name));
+      }
+      if (idx >= 0) setSelectedVoiceIdx(idx);
+    }
+  };
+
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = parseInt(e.target.value);
     setSelectedVoiceIdx(idx);
-    const selectedVoice = voices[idx];
-    if (selectedVoice) {
-      localStorage.setItem("aist-tts-voice-name", selectedVoice.name);
-    }
   };
 
   // Text chunking for Web Speech API stability
@@ -250,6 +345,22 @@ export default function App() {
       <div className="panel-content">
         {activeTab === "voice" ? (
           <div className="tab-pane">
+            {/* Preset select strip */}
+            <div className="preset-strip">
+              <button
+                onClick={() => switchPreset("A")}
+                className={`preset-btn ${currentPreset === "A" ? "active" : ""}`}
+              >
+                {presetALabel}
+              </button>
+              <button
+                onClick={() => switchPreset("B")}
+                className={`preset-btn ${currentPreset === "B" ? "active" : ""}`}
+              >
+                {presetBLabel}
+              </button>
+            </div>
+
             {/* Quick clipboard button - Always visible at the top */}
             <button onClick={readClipboard} className="btn-primary">
               <Clipboard size={14} />
@@ -405,6 +516,25 @@ export default function App() {
                       step="5"
                       value={volume}
                       onChange={(e) => setVolume(parseInt(e.target.value))}
+                    />
+                  </div>
+
+                  {/* Preset Label Rename */}
+                  <div className="setting-row">
+                    <label className="field-label">選択中のプリセット名</label>
+                    <input
+                      type="text"
+                      className="select-field"
+                      style={{ padding: "6px 10px" }}
+                      value={currentPreset === "A" ? presetALabel : presetBLabel}
+                      onChange={(e) => {
+                        if (currentPreset === "A") {
+                          setPresetALabel(e.target.value);
+                        } else {
+                          setPresetBLabel(e.target.value);
+                        }
+                      }}
+                      placeholder="プリセットの新しい名前..."
                     />
                   </div>
                 </div>

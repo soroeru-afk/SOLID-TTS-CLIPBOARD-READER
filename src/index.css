@@ -457,3 +457,38 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
   border: none;
 }
+
+/* Preset Buttons styling */
+.preset-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.preset-btn {
+  padding: 8px;
+  font-size: 10px;
+  font-weight: bold;
+  border-radius: 4px;
+  border: 1px solid var(--border-btn-secondary);
+  background-color: var(--bg-btn-secondary);
+  color: var(--text-btn-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.preset-btn.active {
+  background-color: var(--bg-btn-primary);
+  color: var(--text-btn-primary);
+  border-color: transparent;
+}
+
