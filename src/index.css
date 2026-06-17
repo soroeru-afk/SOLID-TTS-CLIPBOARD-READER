@@ -16,12 +16,9 @@
   --bg-btn-secondary: #242435;
   --text-btn-secondary: #cdd6f4;
   --border-btn-secondary: #3b3b54;
-  --bg-btn-stop: #f38ba8;
-  --text-btn-stop: #1e1e2e;
-  --bg-tab-active: #89b4fa;
-  --text-tab-active: #1e1e2e;
-  --bg-tab-inactive: #1b1b2a;
-  --text-tab-inactive: #a6adc8;
+  --bg-btn-stop: #000000;
+  --text-btn-stop: #ffffff;
+  --border-btn-stop: #cdd6f4;
   --shadow-app: 0 10px 30px rgba(0, 0, 0, 0.6);
   --bg-info: #1b1b2a;
   --border-info: #2d2d3d;
@@ -44,9 +41,9 @@
   --text-btn-primary: #ffffff;
   --bg-btn-secondary: #f1f3f4;
   --text-btn-secondary: #3c4043;
-  --border-btn-secondary: #dadce0;
-  --bg-btn-stop: #ea4335;
+  --bg-btn-stop: #000000;
   --text-btn-stop: #ffffff;
+  --border-btn-stop: #3c4043;
   --bg-tab-active: #1a73e8;
   --text-tab-active: #ffffff;
   --bg-tab-inactive: #f1f3f4;
@@ -70,9 +67,9 @@
   --text-btn-primary: #0a0a0a;
   --bg-btn-secondary: #151515;
   --text-btn-secondary: #d8d8d8;
-  --border-btn-secondary: #222222;
-  --bg-btn-stop: #444444;
-  --text-btn-stop: #f0f0f0;
+  --bg-btn-stop: #000000;
+  --text-btn-stop: #ffffff;
+  --border-btn-stop: #e0e0e0;
   --bg-tab-active: #e0e0e0;
   --text-tab-active: #0a0a0a;
   --bg-tab-inactive: #151515;
@@ -96,9 +93,9 @@
   --text-btn-primary: #ffffff;
   --bg-btn-secondary: #422716;
   --text-btn-secondary: #f5deb3;
-  --border-btn-secondary: #663d21;
   --bg-btn-stop: #a0522d;
   --text-btn-stop: #ffffff;
+  --border-btn-stop: transparent;
   --bg-tab-active: #c8843a;
   --text-tab-active: #ffffff;
   --bg-tab-inactive: #422716;
@@ -122,9 +119,9 @@
   --text-btn-primary: #ffffff;
   --bg-btn-secondary: #121e3d;
   --text-btn-secondary: #7dd3fc;
-  --border-btn-secondary: #1d336f;
-  --bg-btn-stop: #f43f5e;
+  --bg-btn-stop: #000000;
   --text-btn-stop: #ffffff;
+  --border-btn-stop: #7dd3fc;
   --bg-tab-active: #0ea5e9;
   --text-tab-active: #ffffff;
   --bg-tab-inactive: #121e3d;
@@ -144,6 +141,31 @@ body {
   box-sizing: border-box;
   transition: background-color 0.3s ease;
   overflow: hidden;
+}
+
+/* Custom Scrollbar for all panels */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #555555;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #888888;
+}
+
+/* Firefox scrollbar compatibility */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #555555 transparent;
 }
 
 #root {
@@ -365,7 +387,7 @@ body {
 }
 
 .btn-stop {
-  border: none;
+  border: 1px solid var(--border-btn-stop);
   background-color: var(--bg-btn-stop);
   color: var(--text-btn-stop);
 }
