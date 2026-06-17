@@ -13,8 +13,8 @@ export default defineConfig({
         name: 'SOLID TTS CLIPBOARD READER',
         short_name: 'TTS Reader',
         description: 'A standalone TTS reader for copied clipboard texts and manual inputs',
-        theme_color: '#1e1e2e',
-        background_color: '#1e1e2e',
+        theme_color: '#0a0a0a',
+        background_color: '#0a0a0a',
         display: 'standalone',
         icons: [
           {

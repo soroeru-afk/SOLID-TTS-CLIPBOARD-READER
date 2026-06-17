@@ -141,36 +141,28 @@ body {
   color: var(--text-primary);
   font-family: var(--font-family-current);
   font-size: var(--font-size-current);
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  min-height: 100vh;
   box-sizing: border-box;
   transition: background-color 0.3s ease;
+  overflow: hidden;
 }
 
 #root {
-  width: 100%;
+  width: 100vw;
   height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 16px;
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
 /* Application Layout Classes */
 .app-card {
   width: 100%;
-  max-width: 500px;
-  height: auto;
-  max-height: 95vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border-app);
-  border-radius: 8px;
+  border: none;
   background-color: var(--bg-panel);
-  box-shadow: var(--shadow-app);
+  box-shadow: none;
   overflow: hidden;
   box-sizing: border-box;
 }

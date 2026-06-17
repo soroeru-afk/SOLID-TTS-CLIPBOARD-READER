@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3 } from "lucide-react";
+import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette } from "lucide-react";
 
 // Themes configuration
 const THEMES = {
@@ -47,6 +47,11 @@ export default function App() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("aist-tts-theme", theme);
   }, [theme]);
+
+  // Reset collapse state when switching tabs
+  useEffect(() => {
+    setIsCollapsed(true);
+  }, [activeTab]);
 
   useEffect(() => {
     const f = FONTS[font as keyof typeof FONTS] || FONTS.mono;
@@ -416,61 +421,84 @@ export default function App() {
           </div>
         ) : (
           <div className="tab-pane">
-            {/* Theme select */}
-            <div className="setting-row">
-              <label className="field-label" style={{ marginBottom: "6px" }}>
-                カラーテーマ
-              </label>
-              <div className="themes-grid">
-                {Object.entries(THEMES).map(([key, item]) => (
-                  <button
-                    key={key}
-                    onClick={() => setTheme(key)}
-                    className="theme-button"
-                    style={{
-                      background: theme === key ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-                      color: theme === key ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
-                      borderColor: theme === key ? "transparent" : "var(--border-btn-secondary)",
-                      outline: theme === key ? "2px solid var(--bg-btn-primary)" : "none"
-                    }}
+            {/* Collapsible themes toggle button */}
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="btn-action"
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                borderStyle: "dashed",
+                borderColor: "var(--border-btn-secondary)"
+              }}
+            >
+              <Palette size={11} />
+              {isCollapsed ? "⚙️ テーマ・フォント設定を展開" : "⚙️ テーマ・フォント設定を閉じる"}
+              {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+            </button>
+
+            {!isCollapsed && (
+              <div className="space-y-4" style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
+                {/* Theme select */}
+                <div className="setting-row">
+                  <label className="field-label" style={{ marginBottom: "6px" }}>
+                    カラーテーマ
+                  </label>
+                  <div className="themes-grid">
+                    {Object.entries(THEMES).map(([key, item]) => (
+                      <button
+                        key={key}
+                        onClick={() => setTheme(key)}
+                        className="theme-button"
+                        style={{
+                          background: theme === key ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+                          color: theme === key ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
+                          borderColor: theme === key ? "transparent" : "var(--border-btn-secondary)",
+                          outline: theme === key ? "2px solid var(--bg-btn-primary)" : "none"
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Font selector */}
+                <div className="setting-row">
+                  <label className="field-label">パネルのフォント</label>
+                  <select
+                    value={font}
+                    onChange={(e) => setFont(e.target.value)}
+                    className="select-field"
                   >
-                    {item.label}
-                  </button>
-                ))}
+                    {Object.entries(FONTS).map(([key, item]) => (
+                      <option key={key} value={key}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Font Size Selector */}
+                <div className="setting-row">
+                  <label className="field-label">文字サイズ</label>
+                  <select
+                    value={fontSize}
+                    onChange={(e) => setFontSize(parseInt(e.target.value))}
+                    className="select-field"
+                  >
+                    <option value="9">9px (小)</option>
+                    <option value="10">10px</option>
+                    <option value="11">11px (標準)</option>
+                    <option value="12">12px</option>
+                    <option value="13">13px (大)</option>
+                  </select>
+                </div>
               </div>
-            </div>
-
-            {/* Font selector */}
-            <div className="setting-row">
-              <label className="field-label">パネルのフォント</label>
-              <select
-                value={font}
-                onChange={(e) => setFont(e.target.value)}
-                className="select-field"
-              >
-                {Object.entries(FONTS).map(([key, item]) => (
-                  <option key={key} value={key}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Font Size Selector */}
-            <div className="setting-row">
-              <label className="field-label">文字サイズ</label>
-              <select
-                value={fontSize}
-                onChange={(e) => setFontSize(parseInt(e.target.value))}
-                className="select-field"
-              >
-                <option value="9">9px (小)</option>
-                <option value="10">10px</option>
-                <option value="11">11px (標準)</option>
-                <option value="12">12px</option>
-                <option value="13">13px (大)</option>
-              </select>
-            </div>
+            )}
           </div>
         )}
       </div>
