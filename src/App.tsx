@@ -36,6 +36,12 @@ export default function App() {
   const [currentPreset, setCurrentPreset] = useState(() => localStorage.getItem("aist-tts-preset-active") || "A");
   const [presetALabel, setPresetALabel] = useState(() => localStorage.getItem("aist-tts-preset-a-label") || "ボイス A");
   const [presetBLabel, setPresetBLabel] = useState(() => localStorage.getItem("aist-tts-preset-b-label") || "ボイス B");
+  const [tempPresetLabel, setTempPresetLabel] = useState("");
+
+  // Sync temporary input label when active preset or labels change
+  useEffect(() => {
+    setTempPresetLabel(currentPreset === "A" ? presetALabel : presetBLabel);
+  }, [currentPreset, presetALabel, presetBLabel]);
 
   // Temporary local state for sliders that syncs with current preset
   const [speed, setSpeed] = useState(() => {
@@ -193,6 +199,14 @@ export default function App() {
         idx = voices.findIndex(v => /ichiro/i.test(v.name));
       }
       if (idx >= 0) setSelectedVoiceIdx(idx);
+    }
+  };
+
+  const handleSavePresetName = () => {
+    if (currentPreset === "A") {
+      setPresetALabel(tempPresetLabel);
+    } else {
+      setPresetBLabel(tempPresetLabel);
     }
   };
 
@@ -522,20 +536,29 @@ export default function App() {
                   {/* Preset Label Rename */}
                   <div className="setting-row">
                     <label className="field-label">選択中のプリセット名</label>
-                    <input
-                      type="text"
-                      className="select-field"
-                      style={{ padding: "6px 10px" }}
-                      value={currentPreset === "A" ? presetALabel : presetBLabel}
-                      onChange={(e) => {
-                        if (currentPreset === "A") {
-                          setPresetALabel(e.target.value);
-                        } else {
-                          setPresetBLabel(e.target.value);
-                        }
-                      }}
-                      placeholder="プリセットの新しい名前..."
-                    />
+                    <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                      <input
+                        type="text"
+                        className="select-field"
+                        style={{ flex: 1, padding: "6px 10px", boxSizing: "border-box" }}
+                        value={tempPresetLabel}
+                        onChange={(e) => setTempPresetLabel(e.target.value)}
+                        placeholder="新しいプリセット名..."
+                      />
+                      <button
+                        onClick={handleSavePresetName}
+                        className="btn-action"
+                        style={{
+                          flexShrink: 0,
+                          padding: "6px 12px",
+                          borderStyle: "solid",
+                          borderColor: "var(--bg-btn-primary)",
+                          color: "var(--bg-btn-primary)"
+                        }}
+                      >
+                        決定
+                      </button>
+                    </div>
                   </div>
                 </div>
 
