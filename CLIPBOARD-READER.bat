@@ -16,6 +16,6 @@ wscript.exe run_dev.vbs
 timeout /t 2 /nobreak > nul
 
 :: Open Chrome in standalone App window with isolated profile, compact size and dark title bar
-start chrome --app="http://localhost:3000" --user-data-dir="%temp%\solid-tts-profile" --window-size=380,420 --force-dark-mode --enable-features=WebUIDarkMode --no-first-run --no-default-browser-check
+start chrome --app="http://localhost:3005" --user-data-dir="%temp%\solid-tts-profile" --window-size=380,420 --force-dark-mode --enable-features=WebUIDarkMode --no-first-run --no-default-browser-check
 
 exit
