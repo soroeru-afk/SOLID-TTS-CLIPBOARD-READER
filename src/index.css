@@ -518,6 +518,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .avatar-video-wrapper.collapsed {
+  display: none !important;
   max-height: 0 !important;
   opacity: 0;
   border-bottom: none;
@@ -527,6 +528,8 @@ input[type="range"]::-moz-range-thumb {
 .avatar-video-element {
   width: 100%;
   display: block;
+  cursor: pointer;
+  user-select: none;
 }
 
 .avatar-video-element.fit-auto {
@@ -681,4 +684,58 @@ body::-webkit-scrollbar-thumb:hover {
 .btn-icon-subtle:hover {
   color: var(--text-primary);
   border-color: var(--text-secondary);
+}
+
+/* 常時表示共通プレイヤーストリップ (全タブ共通) */
+.global-player-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background-color: var(--bg-panel);
+  border-bottom: 1px solid var(--border-app);
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.global-player-clip-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: calc(var(--font-size-current) * 1.05);
+  font-weight: bold;
+  border-radius: 4px;
+  border: none;
+  background-color: var(--bg-btn-primary);
+  color: var(--text-btn-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.global-player-clip-btn:hover {
+  opacity: 0.92;
+}
+
+.global-player-clip-btn:active {
+  transform: translateY(1px);
+}
+
+.global-player-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.global-player-actions .btn-action {
+  padding: 8px 4px;
+  font-size: var(--font-size-current);
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }

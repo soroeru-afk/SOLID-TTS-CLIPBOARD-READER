@@ -191,11 +191,16 @@ export default function App() {
     localStorage.setItem("solid-tts-vid-fit", next);
   };
 
-  // 動画の折りたたみトグル
+  // 動画の折りたたみトグル（動画を閉じる時は下のパネルも追従してコンパクトに折りたたむ）
   const toggleVidCollapse = () => {
     setIsVidCollapsed(prev => {
       const next = !prev;
       localStorage.setItem("solid-tts-vid-collapsed", next ? "1" : "0");
+      if (next) {
+        // 動画を閉じた時は、テキスト入力欄や詳細設定も追従して閉じる
+        setIsTextareaExpanded(false);
+        setIsCollapsed(true);
+      }
       return next;
     });
   };
@@ -615,6 +620,19 @@ export default function App() {
     }
   };
 
+  // 動画クリック時の再生/一時停止トグル（カオルさまご要望機能）
+  const handleVideoClick = () => {
+    if (status === "再生中") {
+      togglePause();
+    } else if (isPaused) {
+      togglePause();
+    } else if (textToRead.trim()) {
+      startSpeaking(textToRead);
+    } else {
+      readClipboard();
+    }
+  };
+
   return (
     <div className="app-card">
       {/* Header */}
@@ -686,10 +704,13 @@ export default function App() {
               loop
               muted
               playsInline
+              onClick={handleVideoClick}
               className={`avatar-video-element fit-${vidFitMode}`}
               style={{
+                cursor: "pointer",
                 maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "none" : `${vidHeight}px`)
               }}
+              title="クリックで一時停止 / 再生"
             />
             {/* 右上クイックサイズ＆フィット切り替えボタン */}
             {!isVidCollapsed && (
@@ -725,12 +746,48 @@ export default function App() {
         </>
       )}
 
+      {/* ── 常時表示共通プレイヤーストリップ (全タブ共通・カオルさまご要望機能) ── */}
+      <div className="global-player-strip">
+        <button onClick={readClipboard} className="global-player-clip-btn" title="クリップボードの文章を即時読み上げ">
+          <Clipboard size={14} />
+          <span>📋 クリップボードを読み上げる</span>
+        </button>
+        <div className="global-player-actions">
+          <button
+            onClick={() => startSpeaking(textToRead)}
+            disabled={!textToRead.trim()}
+            className="btn-action"
+            title="テキストを再生"
+          >
+            <Play size={11} />
+            再生
+          </button>
+          <button
+            onClick={togglePause}
+            disabled={status === "待機中"}
+            className="btn-action"
+            style={{
+              background: isPaused ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+              color: isPaused ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
+            }}
+            title="一時停止 / 再開"
+          >
+            <Pause size={11} />
+            {isPaused ? "再開" : "一時停止"}
+          </button>
+          <button onClick={stopSpeaking} className="btn-action btn-stop" title="全停止">
+            <Square size={11} />
+            全停止
+          </button>
+        </div>
+      </div>
+
       {/* Main Panel Content */}
       <div className="panel-content">
         {activeTab === "voice" && (
           <div className="tab-pane">
             {/* Preset select strip */}
-            <div className="preset-strip">
+            <div className="preset-strip" style={{ marginBottom: "8px" }}>
               <button
                 onClick={() => switchPreset("A")}
                 className={`preset-btn ${currentPreset === "A" ? "active" : ""}`}
@@ -742,40 +799,6 @@ export default function App() {
                 className={`preset-btn ${currentPreset === "B" ? "active" : ""}`}
               >
                 {presetBLabel}
-              </button>
-            </div>
-
-            {/* Quick clipboard button - Always visible at the top */}
-            <button onClick={readClipboard} className="btn-primary">
-              <Clipboard size={14} />
-              📋 クリップボードを読み上げる
-            </button>
-
-            {/* Actions grid (Play, Pause, Stop) - Always Visible */}
-            <div className="actions-strip">
-              <button
-                onClick={() => startSpeaking(textToRead)}
-                disabled={!textToRead.trim()}
-                className="btn-action"
-              >
-                <Play size={11} />
-                再生
-              </button>
-              <button
-                onClick={togglePause}
-                disabled={status === "待機中"}
-                className="btn-action"
-                style={{
-                  background: isPaused ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-                  color: isPaused ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
-                }}
-              >
-                <Pause size={11} />
-                {isPaused ? "再開" : "一時停止"}
-              </button>
-              <button onClick={stopSpeaking} className="btn-action btn-stop">
-                <Square size={11} />
-                全停止
               </button>
             </div>
 
