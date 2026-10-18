@@ -66,7 +66,12 @@ const deleteVidFromDB = (slotN: number): Promise<void> =>
 
 export default function App() {
   // Load settings from localStorage
-  const [theme, setTheme] = useState(() => localStorage.getItem("aist-tts-theme") || "dark");
+  const [theme, setTheme] = useState(() => {
+    const curSlot = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
+    const slotTheme = localStorage.getItem(`solid-tts-slot-${curSlot}-theme`);
+    if (slotTheme) return slotTheme;
+    return localStorage.getItem("aist-tts-theme") || (curSlot === 1 ? "ocean" : curSlot === 2 ? "brown" : "dark");
+  });
   const [font, setFont] = useState(() => localStorage.getItem("aist-tts-font") || "mono");
   const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem("aist-tts-font-size") || "13"));
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("aist-tts-active-tab") || "voice");
@@ -274,7 +279,11 @@ export default function App() {
       videoRef.current.playbackRate = slotVidSpd;
     }
 
-    // 2. 音声設定の復元
+    // 2. テーマ設定の復元（スロット専用テーマ）
+    const slotTheme = localStorage.getItem(`solid-tts-slot-${idx}-theme`) || (idx === 1 ? "ocean" : idx === 2 ? "brown" : "dark");
+    setTheme(slotTheme);
+
+    // 3. 音声設定の復元
     const savedPreset = localStorage.getItem(`solid-tts-slot-${idx}-preset`) || (idx === 1 ? "A" : "B");
     setCurrentPreset(savedPreset);
 
@@ -393,6 +402,12 @@ export default function App() {
     const next = !vidVisible;
     setVidVisible(next);
     localStorage.setItem("solid-tts-vid-visible", next ? "1" : "0");
+  };
+
+  const handleThemeSelect = (newTheme: string) => {
+    setTheme(newTheme);
+    localStorage.setItem("aist-tts-theme", newTheme);
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-theme`, newTheme);
   };
 
   // Apply Theme & Fonts to HTML elements
@@ -1301,7 +1316,7 @@ export default function App() {
                   {Object.entries(THEMES).map(([key, item]) => (
                     <button
                       key={key}
-                      onClick={() => setTheme(key)}
+                      onClick={() => handleThemeSelect(key)}
                       className="theme-button"
                       style={{
                         background: theme === key ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
