@@ -130,7 +130,18 @@ export default function App() {
   };
 
   const [vidSpeed, setVidSpeed] = useState(() => getSlotVidSpeed(vidSlot));
-  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "340")); // デフォルト幅フィット340px
+  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "340")); // デフォルト標準340px
+  const [vidMode, setVidMode] = useState<"normal" | "expanded">(() => {
+    return (localStorage.getItem("solid-tts-vid-mode") as "normal" | "expanded") || "normal";
+  });
+
+  const toggleVidMode = () => {
+    setVidMode((prev) => {
+      const next = prev === "normal" ? "expanded" : "normal";
+      localStorage.setItem("solid-tts-vid-mode", next);
+      return next;
+    });
+  };
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
   const [vidVisible, setVidVisible] = useState(() => localStorage.getItem("solid-tts-vid-visible") !== "0"); // デフォルトON
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
@@ -631,25 +642,32 @@ export default function App() {
 
       {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合に常時上部へ表示） */}
       {videoBlobUrl && vidVisible && (
-        <div className="avatar-video-wrapper" style={{ maxHeight: `${vidHeight}px` }}>
+        <div
+          className="avatar-video-wrapper"
+          style={{
+            maxHeight: vidMode === "expanded" ? "none" : `${vidHeight}px`
+          }}
+        >
           <video
             ref={videoRef}
             src={videoBlobUrl}
             loop
             muted
             playsInline
-            className="avatar-video-element"
-            style={{ maxHeight: `${vidHeight}px` }}
+            className={`avatar-video-element ${vidMode}`}
+            style={{
+              maxHeight: vidMode === "expanded" ? "none" : `${vidHeight}px`
+            }}
           />
-          {/* 右上クイックサイズ切り替えボタン */}
+          {/* 右上ノーマル ↔ 拡大 切り替えボタン */}
           <div className="avatar-size-bar">
             <button
-              onClick={() => changeVidHeight(vidHeight >= 340 ? 180 : 340)}
+              onClick={toggleVidMode}
               className="btn-size-toggle"
-              title={vidHeight >= 340 ? "標準サイズ(180px)に縮小" : "全幅フィット(340px)に拡大"}
+              title={vidMode === "expanded" ? "ノーマル表示に戻す" : "拡大表示(横幅フィット＆全体表示)に切替"}
             >
-              {vidHeight >= 340 ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
-              {vidHeight >= 340 ? "縮小" : "全幅フィット"}
+              {vidMode === "expanded" ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+              {vidMode === "expanded" ? "ノーマル" : "拡大"}
             </button>
           </div>
         </div>
@@ -940,46 +958,42 @@ export default function App() {
               </div>
             </div>
 
-            {/* 動画表示サイズ設定（カオルさまご要望機能） */}
+            {/* 動画表示サイズ設定（ノーマル ↔ 拡大） */}
             <div className="setting-row" style={{ marginTop: "10px" }}>
               <div className="setting-label-row">
-                <span>動画の表示サイズ（高さ・横幅）</span>
-                <span>{vidHeight}px</span>
+                <span>動画の表示形式</span>
+                <span>{vidMode === "expanded" ? "拡大 (全幅・全体表示)" : `ノーマル (${vidHeight}px)`}</span>
               </div>
-              <div className="size-presets-grid" style={{ marginBottom: "6px" }}>
+              <div className="size-presets-grid" style={{ marginBottom: "6px", gridTemplateColumns: "1fr 1fr" }}>
                 <button
-                  onClick={() => changeVidHeight(180)}
-                  className={`slot-btn ${vidHeight === 180 ? "active" : ""}`}
+                  onClick={() => {
+                    setVidMode("normal");
+                    localStorage.setItem("solid-tts-vid-mode", "normal");
+                  }}
+                  className={`slot-btn ${vidMode === "normal" ? "active" : ""}`}
                 >
-                  小 (180)
+                  📐 ノーマル
                 </button>
                 <button
-                  onClick={() => changeVidHeight(260)}
-                  className={`slot-btn ${vidHeight === 260 ? "active" : ""}`}
+                  onClick={() => {
+                    setVidMode("expanded");
+                    localStorage.setItem("solid-tts-vid-mode", "expanded");
+                  }}
+                  className={`slot-btn ${vidMode === "expanded" ? "active" : ""}`}
                 >
-                  中 (260)
-                </button>
-                <button
-                  onClick={() => changeVidHeight(340)}
-                  className={`slot-btn ${vidHeight === 340 ? "active" : ""}`}
-                >
-                  幅フィット (340)
-                </button>
-                <button
-                  onClick={() => changeVidHeight(420)}
-                  className={`slot-btn ${vidHeight === 420 ? "active" : ""}`}
-                >
-                  大 (420)
+                  🔍 拡大 (全体表示)
                 </button>
               </div>
-              <input
-                type="range"
-                min="140"
-                max="480"
-                step="10"
-                value={vidHeight}
-                onChange={(e) => changeVidHeight(parseInt(e.target.value))}
-              />
+              {vidMode === "normal" && (
+                <input
+                  type="range"
+                  min="160"
+                  max="480"
+                  step="10"
+                  value={vidHeight}
+                  onChange={(e) => changeVidHeight(parseInt(e.target.value))}
+                />
+              )}
             </div>
 
             {/* 口パク動画連動トグル */}
