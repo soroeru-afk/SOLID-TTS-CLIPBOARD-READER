@@ -196,7 +196,7 @@ export default function App() {
       // PWAウィンドウの自動リサイズ追従（カオルさまご要望機能）
       try {
         if (window.resizeTo && window.outerWidth) {
-          const targetH = next ? 340 : 840;
+          const targetH = next ? 340 : 960;
           window.resizeTo(window.outerWidth, targetH);
         }
       } catch (e) {}
@@ -642,7 +642,7 @@ export default function App() {
           <div
             className={`avatar-video-wrapper ${isVidCollapsed ? "collapsed" : ""}`}
             style={{
-              maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "none" : `${vidHeight}px`)
+              maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "calc(100vh - 205px)" : `${vidHeight}px`)
             }}
           >
             <video
@@ -655,7 +655,7 @@ export default function App() {
               className={`avatar-video-element fit-${vidFitMode}`}
               style={{
                 cursor: "pointer",
-                maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "none" : `${vidHeight}px`)
+                maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "calc(100vh - 205px)" : `${vidHeight}px`)
               }}
               title="クリックで一時停止 / 再生"
             />
