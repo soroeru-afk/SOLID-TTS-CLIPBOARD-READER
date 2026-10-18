@@ -7,17 +7,7 @@ const THEMES = {
   dark: { label: "ダーク" },
   pastel: { label: "モノトーン" },
   brown: { label: "ブラウン" },
-  pink: { label: "パステルピンク" }
-};
-
-// ヘッダー＆ブラウザ/PWA theme-color 動的同期マッピング
-const THEME_HEADER_COLORS: Record<string, string> = {
-  light: "#f1f3f4",
-  dark: "#1b1b2a",
-  pastel: "#111111",
-  brown: "#4c2c19",
-  pink: "#3a2528",
-  ocean: "#3a2528"
+  ocean: { label: "オーシャン" }
 };
 
 const FONTS = {
@@ -76,10 +66,7 @@ const deleteVidFromDB = (slotN: number): Promise<void> =>
 
 export default function App() {
   // Load settings from localStorage
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem("aist-tts-theme") || "dark";
-    return saved === "ocean" ? "pink" : saved;
-  });
+  const [theme, setTheme] = useState(() => localStorage.getItem("aist-tts-theme") || "dark");
   const [font, setFont] = useState(() => localStorage.getItem("aist-tts-font") || "mono");
   const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem("aist-tts-font-size") || "13"));
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("aist-tts-active-tab") || "voice");
@@ -92,41 +79,32 @@ export default function App() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceIdx, setSelectedVoiceIdx] = useState<number>(0);
 
-  // =============================================
-  // キャラクター・スロット統合管理 (スロット1/2/3)
-  // =============================================
-  const [slotNames, setSlotNames] = useState<string[]>(() => [
-    localStorage.getItem("solid-tts-slot-0-name") || "🤖 ロボット",
-    localStorage.getItem("solid-tts-slot-1-name") || "👩 女性",
-    localStorage.getItem("solid-tts-slot-2-name") || "👨 男性"
-  ]);
+  // Presets state
+  const [currentPreset, setCurrentPreset] = useState(() => localStorage.getItem("aist-tts-preset-active") || "A");
+  const [presetALabel, setPresetALabel] = useState(() => localStorage.getItem("aist-tts-preset-a-label") || "ボイス A");
+  const [presetBLabel, setPresetBLabel] = useState(() => localStorage.getItem("aist-tts-preset-b-label") || "ボイス B");
+  const [tempPresetLabel, setTempPresetLabel] = useState("");
 
-  const [vidSlot, setVidSlot] = useState(() => {
-    const v = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
-    return isNaN(v) || v < 0 || v >= VID_SLOT_COUNT ? 0 : v;
-  });
+  // Sync temporary input label when active preset or labels change
+  useEffect(() => {
+    setTempPresetLabel(currentPreset === "A" ? presetALabel : presetBLabel);
+  }, [currentPreset, presetALabel, presetBLabel]);
 
-  const getSlotVidSpeed = (slot: number) => {
-    const v = localStorage.getItem(`solid-tts-vid-speed-slot-${slot}`);
-    if (v) return parseFloat(v);
-    const old = localStorage.getItem("solid-tts-vid-speed");
-    return old ? parseFloat(old) : 1.25;
-  };
-
-  const [vidSpeed, setVidSpeed] = useState(() => getSlotVidSpeed(vidSlot));
-
-  // スロット別音声設定（話速・音程・音量）
+  // Temporary local state for sliders that syncs with current preset
   const [speed, setSpeed] = useState(() => {
-    const v = localStorage.getItem(`solid-tts-slot-${vidSlot}-speed`);
-    return v ? parseFloat(v) : (vidSlot === 0 ? 1.25 : vidSlot === 1 ? 1.2 : 1.15);
+    const active = localStorage.getItem("aist-tts-preset-active") || "A";
+    const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
+    return parseFloat(localStorage.getItem(prefix + "speed") || "1.2");
   });
   const [pitch, setPitch] = useState(() => {
-    const v = localStorage.getItem(`solid-tts-slot-${vidSlot}-pitch`);
-    return v ? parseFloat(v) : (vidSlot === 0 ? 0.95 : vidSlot === 1 ? 1.1 : 1.0);
+    const active = localStorage.getItem("aist-tts-preset-active") || "A";
+    const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
+    return parseFloat(localStorage.getItem(prefix + "pitch") || "1.0");
   });
   const [volume, setVolume] = useState(() => {
-    const v = localStorage.getItem(`solid-tts-slot-${vidSlot}-volume`);
-    return v ? parseInt(v) : 80;
+    const active = localStorage.getItem("aist-tts-preset-active") || "A";
+    const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
+    return parseInt(localStorage.getItem(prefix + "volume") || "80");
   });
 
   const [status, setStatus] = useState("待機中");
@@ -136,9 +114,16 @@ export default function App() {
   const speechQueue = useRef<string[]>([]);
   const currentChunkText = useRef<string>("");
   const currentChunkCharIndex = useRef<number>(0);
-  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "480"));
-  const [vidFitMode, setVidFitMode] = useState<"auto" | "cover" | "contain">(() => (localStorage.getItem("solid-tts-vid-fit") as "auto" | "cover" | "contain") || "auto"); // デフォルト上下ノーカット全幅
-  const [isVidCollapsed, setIsVidCollapsed] = useState(() => localStorage.getItem("solid-tts-vid-collapsed") === "1"); // 動画折りたたみ状態
+
+  // =============================================
+  // アバター動画（口パク動画）State & 制御
+  // =============================================
+  const [vidSlot, setVidSlot] = useState(() => {
+    const v = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
+    return isNaN(v) || v < 0 || v >= VID_SLOT_COUNT ? 0 : v;
+  });
+  const [vidSpeed, setVidSpeed] = useState(() => parseFloat(localStorage.getItem("solid-tts-vid-speed") || "1.25"));
+  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "340")); // デフォルト幅フィット340px
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
   const [vidVisible, setVidVisible] = useState(() => localStorage.getItem("solid-tts-vid-visible") !== "0"); // デフォルトON
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
@@ -169,79 +154,13 @@ export default function App() {
     if (videoRef.current) {
       videoRef.current.playbackRate = vidSpeed;
     }
+    localStorage.setItem("solid-tts-vid-speed", String(vidSpeed));
   }, [vidSpeed, videoBlobUrl]);
 
   // 動画表示高さの保存
   const changeVidHeight = (h: number) => {
     setVidHeight(h);
     localStorage.setItem("solid-tts-vid-height", String(h));
-  };
-
-  // 全幅フィット（auto: 上下ノーカット全幅 / cover: 枠内全幅カバー / contain: 全体収容）の切り替え
-  const toggleVidFitMode = () => {
-    const next = vidFitMode === "auto" ? "cover" : vidFitMode === "cover" ? "contain" : "auto";
-    setVidFitMode(next);
-    localStorage.setItem("solid-tts-vid-fit", next);
-  };
-
-  // 動画の折りたたみトグル
-  const toggleVidCollapse = () => {
-    setIsVidCollapsed(prev => {
-      const next = !prev;
-      localStorage.setItem("solid-tts-vid-collapsed", next ? "1" : "0");
-      return next;
-    });
-  };
-
-  // スロットごとの動画再生速度変更
-  const handleVidSpeedChange = (spd: number) => {
-    setVidSpeed(spd);
-    localStorage.setItem(`solid-tts-vid-speed-slot-${vidSlot}`, String(spd));
-    localStorage.setItem("solid-tts-vid-speed", String(spd));
-    if (videoRef.current) {
-      videoRef.current.playbackRate = spd;
-    }
-  };
-
-  // キャラクター・スロット切り替え（動画・音声・速度・設定を完全同期・即時復元）
-  const switchCharacterSlot = (idx: number) => {
-    pauseAvatarVideo();
-    setVidSlot(idx);
-    localStorage.setItem("solid-tts-vid-slot", String(idx));
-
-    // 1. 動画再生速度の復元
-    const slotVidSpd = getSlotVidSpeed(idx);
-    setVidSpeed(slotVidSpd);
-    if (videoRef.current) {
-      videoRef.current.playbackRate = slotVidSpd;
-    }
-
-    // 2. 音声設定（speed, pitch, volume, voice）の復元
-    const slotSpd = parseFloat(localStorage.getItem(`solid-tts-slot-${idx}-speed`) || (idx === 0 ? "1.25" : idx === 1 ? "1.2" : "1.15"));
-    const slotPit = parseFloat(localStorage.getItem(`solid-tts-slot-${idx}-pitch`) || (idx === 0 ? "0.95" : idx === 1 ? "1.1" : "1.0"));
-    const slotVol = parseInt(localStorage.getItem(`solid-tts-slot-${idx}-volume`) || "80");
-    const slotVoiceName = localStorage.getItem(`solid-tts-slot-${idx}-voice`);
-
-    setSpeed(slotSpd);
-    setPitch(slotPit);
-    setVolume(slotVol);
-
-    if (slotVoiceName && voices.length > 0) {
-      const vIdx = voices.findIndex(v => v.name === slotVoiceName);
-      if (vIdx !== -1) setSelectedVoiceIdx(vIdx);
-    }
-  };
-
-  const switchVidSlot = switchCharacterSlot; // 互換エイリアス
-
-  // スロット表示名の更新
-  const updateSlotName = (idx: number, newName: string) => {
-    setSlotNames(prev => {
-      const next = [...prev];
-      next[idx] = newName;
-      localStorage.setItem(`solid-tts-slot-${idx}-name`, newName);
-      return next;
-    });
   };
 
   // アバター動画の再生・一時停止処理
@@ -262,6 +181,12 @@ export default function App() {
     if (vid && !vid.paused) {
       vid.pause();
     }
+  };
+
+  const switchVidSlot = (idx: number) => {
+    pauseAvatarVideo();
+    setVidSlot(idx);
+    localStorage.setItem("solid-tts-vid-slot", String(idx));
   };
 
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -309,16 +234,6 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("aist-tts-theme", theme);
-
-    // ブラウザ/PWA最上部ヘッダーの <meta name="theme-color"> を動的同期
-    const headerColor = THEME_HEADER_COLORS[theme] || "#1b1b2a";
-    let metaThemeColor = document.querySelector('meta[name="theme-color"]');
-    if (!metaThemeColor) {
-      metaThemeColor = document.createElement("meta");
-      metaThemeColor.setAttribute("name", "theme-color");
-      document.head.appendChild(metaThemeColor);
-    }
-    metaThemeColor.setAttribute("content", headerColor);
   }, [theme]);
 
   // Reset collapse state when switching tabs
@@ -341,24 +256,37 @@ export default function App() {
     localStorage.setItem("aist-tts-active-tab", activeTab);
   }, [activeTab]);
 
-  // スロット別音声設定のリアルタイム保存
+  // Save active preset settings when sliders change
   useEffect(() => {
-    localStorage.setItem(`solid-tts-slot-${vidSlot}-speed`, String(speed));
-  }, [speed, vidSlot]);
+    const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
+    localStorage.setItem(prefix + "speed", String(speed));
+  }, [speed, currentPreset]);
 
   useEffect(() => {
-    localStorage.setItem(`solid-tts-slot-${vidSlot}-pitch`, String(pitch));
-  }, [pitch, vidSlot]);
+    const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
+    localStorage.setItem(prefix + "pitch", String(pitch));
+  }, [pitch, currentPreset]);
 
   useEffect(() => {
-    localStorage.setItem(`solid-tts-slot-${vidSlot}-volume`, String(volume));
-  }, [volume, vidSlot]);
+    const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
+    localStorage.setItem(prefix + "volume", String(volume));
+  }, [volume, currentPreset]);
 
+  useEffect(() => {
+    localStorage.setItem("aist-tts-preset-a-label", presetALabel);
+  }, [presetALabel]);
+
+  useEffect(() => {
+    localStorage.setItem("aist-tts-preset-b-label", presetBLabel);
+  }, [presetBLabel]);
+
+  // Sync selected voice name to preset
   useEffect(() => {
     if (voices[selectedVoiceIdx]) {
-      localStorage.setItem(`solid-tts-slot-${vidSlot}-voice`, voices[selectedVoiceIdx].name);
+      const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
+      localStorage.setItem(prefix + "voice", voices[selectedVoiceIdx].name);
     }
-  }, [selectedVoiceIdx, voices, vidSlot]);
+  }, [selectedVoiceIdx, voices, currentPreset]);
 
   // Load voices list
   useEffect(() => {
@@ -368,13 +296,16 @@ export default function App() {
       if (!jaVoices.length) jaVoices = all;
       setVoices(jaVoices);
 
-      const savedVoice = localStorage.getItem(`solid-tts-slot-${vidSlot}-voice`);
-      let idx = jaVoices.findIndex((v) => v.name === savedVoice);
-      if (idx < 0) {
-        if (vidSlot === 0) {
-          idx = jaVoices.findIndex((v) => /ichiro|male|google 日本語/i.test(v.name));
-        } else if (vidSlot === 1) {
-          idx = jaVoices.findIndex((v) => /haruka|female/i.test(v.name));
+      const active = localStorage.getItem("aist-tts-preset-active") || "A";
+      const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
+      const savedName = localStorage.getItem(prefix + "voice") || "";
+      let idx = jaVoices.findIndex((v) => v.name === savedName);
+
+      if (idx < 0 && !savedName) {
+        if (active === "A") {
+          idx = jaVoices.findIndex((v) => /haruka/i.test(v.name));
+        } else {
+          idx = jaVoices.findIndex((v) => /ichiro/i.test(v.name));
         }
       }
       if (idx < 0) idx = 0;
@@ -393,34 +324,56 @@ export default function App() {
     };
   }, []);
 
+  const switchPreset = (presetName: string) => {
+    const prefixOld = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
+    localStorage.setItem(prefixOld + "speed", String(speed));
+    localStorage.setItem(prefixOld + "pitch", String(pitch));
+    localStorage.setItem(prefixOld + "volume", String(volume));
+    if (voices[selectedVoiceIdx]) {
+      localStorage.setItem(prefixOld + "voice", voices[selectedVoiceIdx].name);
+    }
+
+    setCurrentPreset(presetName);
+    localStorage.setItem("aist-tts-preset-active", presetName);
+
+    const prefixNew = `aist-tts-preset-${presetName.toLowerCase()}-`;
+    const newSpeed = parseFloat(localStorage.getItem(prefixNew + "speed") || "1.2");
+    const newPitch = parseFloat(localStorage.getItem(prefixNew + "pitch") || "1.0");
+    const newVolume = parseInt(localStorage.getItem(prefixNew + "volume") || "80");
+    const newVoiceName = localStorage.getItem(prefixNew + "voice") || "";
+
+    setSpeed(newSpeed);
+    setPitch(newPitch);
+    setVolume(newVolume);
+
+    if (newVoiceName) {
+      const idx = voices.findIndex((v) => v.name === newVoiceName);
+      if (idx >= 0) {
+        setSelectedVoiceIdx(idx);
+      }
+    } else {
+      let idx = -1;
+      if (presetName === "A") {
+        idx = voices.findIndex((v) => /haruka/i.test(v.name));
+      } else {
+        idx = voices.findIndex((v) => /ichiro/i.test(v.name));
+      }
+      if (idx >= 0) setSelectedVoiceIdx(idx);
+    }
+  };
+
+  const handleSavePresetName = () => {
+    if (currentPreset === "A") {
+      setPresetALabel(tempPresetLabel);
+    } else {
+      setPresetBLabel(tempPresetLabel);
+    }
+  };
+
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = parseInt(e.target.value);
     setSelectedVoiceIdx(idx);
-    if (voices[idx]) {
-      localStorage.setItem(`solid-tts-slot-${vidSlot}-voice`, voices[idx].name);
-    }
   };
-
-  // 一郎（男性声） / 遥か（女性声） ワンタッチ選択ハンドラー（カオルさまご要望機能）
-  const selectPredefinedVoice = (type: "ichiro" | "haruka") => {
-    if (!voices.length) return;
-    let targetIdx = -1;
-    if (type === "ichiro") {
-      targetIdx = voices.findIndex((v) => /ichiro|male|google 日本語|google/i.test(v.name));
-      if (targetIdx < 0) targetIdx = 0;
-    } else {
-      targetIdx = voices.findIndex((v) => /haruka|female|ayumi|sayaka/i.test(v.name));
-      if (targetIdx < 0) targetIdx = voices.length > 1 ? 1 : 0;
-    }
-    setSelectedVoiceIdx(targetIdx);
-    if (voices[targetIdx]) {
-      localStorage.setItem(`solid-tts-slot-${vidSlot}-voice`, voices[targetIdx].name);
-    }
-  };
-
-  const currentVoiceName = voices[selectedVoiceIdx]?.name || "";
-  const isIchiroSelected = /ichiro|male|google 日本語/i.test(currentVoiceName) || (!/haruka|female|ayumi|sayaka/i.test(currentVoiceName) && selectedVoiceIdx === 0);
-  const isHarukaSelected = /haruka|female|ayumi|sayaka/i.test(currentVoiceName) || (!isIchiroSelected && selectedVoiceIdx > 0);
 
   // Text chunking for Web Speech API stability
   const splitIntoChunks = (text: string, maxLen = 140): string[] => {
@@ -599,21 +552,8 @@ export default function App() {
     }
   };
 
-  // 動画クリック時の再生/一時停止トグル（カオルさまご要望機能）
-  const handleVideoClick = () => {
-    if (status === "再生中") {
-      togglePause();
-    } else if (isPaused) {
-      togglePause();
-    } else if (textToRead.trim()) {
-      startSpeaking(textToRead);
-    } else {
-      readClipboard();
-    }
-  };
-
   return (
-    <div className={`app-card ${isVidCollapsed ? "collapsed-view" : ""}`}>
+    <div className="app-card">
       {/* Header */}
       <div className="app-header">
         <span className="header-title">
@@ -634,7 +574,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── タブナビゲーション（最上部固定・常に100%直接表示） ── */}
+      {/* Tabs */}
       <div className="tabs-container">
         <button
           onClick={() => setActiveTab("voice")}
@@ -668,138 +608,84 @@ export default function App() {
         </button>
       </div>
 
+      {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合に常時上部へ表示） */}
+      {videoBlobUrl && vidVisible && (
+        <div className="avatar-video-wrapper" style={{ maxHeight: `${vidHeight}px` }}>
+          <video
+            ref={videoRef}
+            src={videoBlobUrl}
+            loop
+            muted
+            playsInline
+            className="avatar-video-element"
+            style={{ maxHeight: `${vidHeight}px` }}
+          />
+          {/* 右上クイックサイズ切り替えボタン */}
+          <div className="avatar-size-bar">
+            <button
+              onClick={() => changeVidHeight(vidHeight >= 340 ? 180 : 340)}
+              className="btn-size-toggle"
+              title={vidHeight >= 340 ? "標準サイズ(180px)に縮小" : "全幅フィット(340px)に拡大"}
+            >
+              {vidHeight >= 340 ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+              {vidHeight >= 340 ? "縮小" : "全幅フィット"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Panel Content */}
       <div className="panel-content">
         {activeTab === "voice" && (
           <div className="tab-pane">
-            {/* キャラクター・スロット切替バー (動画・音声・速度を完全同期) */}
-            <div className="character-slot-bar" style={{ borderRadius: "6px", marginBottom: "4px" }}>
-              {[0, 1, 2].map((idx) => (
-                <button
-                  key={idx}
-                  onClick={() => switchCharacterSlot(idx)}
-                  className={`character-slot-btn ${vidSlot === idx ? "active" : ""}`}
-                  title={`スロット${idx + 1}: ${slotNames[idx]} に切替（動画・音声・速度を完全同期）`}
-                >
-                  <span className="slot-btn-num">{idx + 1}</span>
-                  <span>{slotNames[idx]}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合） */}
-            {videoBlobUrl && vidVisible && (
-              <div style={{ marginBottom: "6px" }}>
-                <div
-                  className={`avatar-video-wrapper ${isVidCollapsed ? "collapsed" : ""}`}
-                  style={{
-                    maxHeight: isVidCollapsed ? "0px" : `${Math.min(vidHeight, 260)}px`,
-                    position: "relative"
-                  }}
-                >
-                  <video
-                    ref={videoRef}
-                    src={videoBlobUrl}
-                    loop
-                    muted
-                    playsInline
-                    onClick={handleVideoClick}
-                    className={`avatar-video-element fit-${vidFitMode}`}
-                    style={{
-                      cursor: "pointer",
-                      maxHeight: isVidCollapsed ? "0px" : `${Math.min(vidHeight, 260)}px`
-                    }}
-                    title="クリックで一時停止 / 再生"
-                  />
-                  {!isVidCollapsed && (
-                    <div className="avatar-size-bar">
-                      <button
-                        onClick={toggleVidFitMode}
-                        className="btn-size-toggle"
-                        title="表示形式切替"
-                        style={{ marginRight: "4px" }}
-                      >
-                        {vidFitMode === "auto" ? "📐 全幅" : vidFitMode === "cover" ? "✂️ カバー" : "🔲 収容"}
-                      </button>
-                      <button
-                        onClick={toggleVidCollapse}
-                        className="btn-size-toggle"
-                        title="動画を閉じる"
-                      >
-                        <ChevronUp size={11} /> 閉じる
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {isVidCollapsed && (
-                  <div
-                    onClick={toggleVidCollapse}
-                    className="avatar-collapse-bar"
-                    title="動画を展開する"
-                    style={{ marginTop: "4px" }}
-                  >
-                    <ChevronDown size={13} />
-                    <span>🎬 アバター動画を展開する</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* プレイヤーストリップ (クリップボード読上、再生、一時停止、全停止) */}
-            <div className="global-player-strip" style={{ margin: "2px 0 6px 0", borderRadius: "6px" }}>
-              <button onClick={readClipboard} className="global-player-clip-btn" title="クリップボードの文章を即時読み上げ">
-                <Clipboard size={14} />
-                <span>📋 クリップボードを読み上げる</span>
+            {/* Preset select strip */}
+            <div className="preset-strip">
+              <button
+                onClick={() => switchPreset("A")}
+                className={`preset-btn ${currentPreset === "A" ? "active" : ""}`}
+              >
+                {presetALabel}
               </button>
-              <div className="global-player-actions">
-                <button
-                  onClick={() => startSpeaking(textToRead)}
-                  disabled={!textToRead.trim()}
-                  className="btn-action"
-                  title="テキストを再生"
-                >
-                  <Play size={11} />
-                  再生
-                </button>
-                <button
-                  onClick={togglePause}
-                  disabled={status === "待機中"}
-                  className="btn-action"
-                  style={{
-                    background: isPaused ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-                    color: isPaused ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
-                  }}
-                  title="一時停止 / 再開"
-                >
-                  <Pause size={11} />
-                  {isPaused ? "再開" : "一時停止"}
-                </button>
-                <button onClick={stopSpeaking} className="btn-action btn-stop" title="全停止">
-                  <Square size={11} />
-                  全停止
-                </button>
-              </div>
+              <button
+                onClick={() => switchPreset("B")}
+                className={`preset-btn ${currentPreset === "B" ? "active" : ""}`}
+              >
+                {presetBLabel}
+              </button>
             </div>
-            {/* キャラクター名（スロット表示名）編集バー */}
-            <div className="setting-row" style={{ marginBottom: "10px" }}>
-              <div className="setting-label-row">
-                <span>キャラクター名 (スロット {vidSlot + 1})</span>
-                <span style={{ opacity: 0.7 }}>動画・音声設定と連動</span>
-              </div>
-              <input
-                type="text"
-                value={slotNames[vidSlot] || ""}
-                onChange={(e) => updateSlotName(vidSlot, e.target.value)}
-                placeholder="キャラクター名を入力 (例: 🤖 ロボット)"
-                className="input-field"
+
+            {/* Quick clipboard button - Always visible at the top */}
+            <button onClick={readClipboard} className="btn-primary">
+              <Clipboard size={14} />
+              📋 クリップボードを読み上げる
+            </button>
+
+            {/* Actions grid (Play, Pause, Stop) - Always Visible */}
+            <div className="actions-strip">
+              <button
+                onClick={() => startSpeaking(textToRead)}
+                disabled={!textToRead.trim()}
+                className="btn-action"
+              >
+                <Play size={11} />
+                再生
+              </button>
+              <button
+                onClick={togglePause}
+                disabled={status === "待機中"}
+                className="btn-action"
                 style={{
-                  width: "100%",
-                  padding: "7px 10px",
-                  fontSize: "var(--font-size-current)",
-                  boxSizing: "border-box"
+                  background: isPaused ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+                  color: isPaused ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
                 }}
-              />
+              >
+                <Pause size={11} />
+                {isPaused ? "再開" : "一時停止"}
+              </button>
+              <button onClick={stopSpeaking} className="btn-action btn-stop">
+                <Square size={11} />
+                全停止
+              </button>
             </div>
 
             {/* Textarea collapse toggle */}
@@ -835,148 +721,137 @@ export default function App() {
               </div>
             )}
 
-            {/* ── 音声設定（常時全表示・カオルさまご要望機能） ── */}
-            <div className="settings-grid" style={{ paddingTop: "6px" }}>
-              {/* 一郎（男性声） / 遥か（女性声） ワンタッチボイス選択（カオルさまご要望機能） */}
-              <div className="setting-row">
-                <div className="setting-label-row">
-                  <span>ボイス選択 (話者)</span>
-                  <span style={{ fontSize: "0.85em", opacity: 0.85 }}>
-                    {isIchiroSelected ? "👨 一郎（男性声）" : isHarukaSelected ? "👩 遥か（女性声）" : (voices[selectedVoiceIdx]?.name || "日本語")}
+            {/* Collapsible settings toggle button */}
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="btn-action"
+              style={{
+                width: "100%",
+                marginTop: "2px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                borderStyle: "dashed",
+                borderColor: "var(--border-btn-secondary)"
+              }}
+            >
+              <Settings size={11} />
+              {isCollapsed ? "⚙️ 詳細設定を展開 (ボイス・話速)" : "⚙️ 詳細設定を閉じる"}
+              {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+            </button>
+
+            {/* Collapsible Content Section */}
+            {!isCollapsed && (
+              <div
+                className="space-y-4"
+                style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "6px" }}
+              >
+                {/* Settings controls */}
+                <div className="settings-grid" style={{ paddingTop: "10px" }}>
+                  {/* Voice select */}
+                  <div className="setting-row">
+                    <label className="field-label">ボイス</label>
+                    <select
+                      value={selectedVoiceIdx}
+                      onChange={handleVoiceChange}
+                      className="select-field"
+                    >
+                      {voices.map((v, i) => (
+                        <option key={i} value={i}>
+                          {v.name} ({v.lang})
+                        </option>
+                      ))}
+                      {!voices.length && <option value="0">音声読み込み中...</option>}
+                    </select>
+                  </div>
+
+                  {/* Speed slider */}
+                  <div className="setting-row">
+                    <div className="setting-label-row">
+                      <span>話速</span>
+                      <span>{speed.toFixed(1)}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="3.0"
+                      step="0.1"
+                      value={speed}
+                      onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                    />
+                  </div>
+
+                  {/* Pitch slider */}
+                  <div className="setting-row">
+                    <div className="setting-label-row">
+                      <span>ピッチ (高低)</span>
+                      <span>{pitch.toFixed(1)}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.1"
+                      value={pitch}
+                      onChange={(e) => setPitch(parseFloat(e.target.value))}
+                    />
+                  </div>
+
+                  {/* Volume slider */}
+                  <div className="setting-row">
+                    <div className="setting-label-row">
+                      <span>音量</span>
+                      <span>{volume}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      value={volume}
+                      onChange={(e) => setVolume(parseInt(e.target.value))}
+                    />
+                  </div>
+
+                  {/* Preset Label Rename */}
+                  <div className="setting-row">
+                    <label className="field-label">選択中のプリセット名</label>
+                    <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                      <input
+                        type="text"
+                        className="select-field"
+                        style={{ flex: 1, padding: "6px 10px", boxSizing: "border-box" }}
+                        value={tempPresetLabel}
+                        onChange={(e) => setTempPresetLabel(e.target.value)}
+                        placeholder="新しいプリセット名..."
+                      />
+                      <button
+                        onClick={handleSavePresetName}
+                        className="btn-action"
+                        style={{
+                          flexShrink: 0,
+                          padding: "6px 12px",
+                          borderStyle: "solid",
+                          borderColor: "var(--bg-btn-primary)",
+                          color: "var(--bg-btn-primary)"
+                        }}
+                      >
+                        決定
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info Box */}
+                <div className="info-alert">
+                  <HelpCircle size={12} style={{ flexShrink: 0, marginTop: "1px" }} />
+                  <span>
+                    「クリップボードを読み上げる」はコピーした文章を自動取得して再生します。入力ボックスへ貼り付け・直接編集して通常の「再生」を行うことも可能です。
                   </span>
                 </div>
-                <div className="voice-selector-grid">
-                  <button
-                    type="button"
-                    onClick={() => selectPredefinedVoice("ichiro")}
-                    className={`voice-card-btn ${isIchiroSelected ? "active" : ""}`}
-                    title="一郎（男性ボイス）に切り替え"
-                  >
-                    <span className="voice-card-avatar">👨</span>
-                    <div className="voice-card-text">
-                      <span className="voice-card-title">一郎</span>
-                      <span className="voice-card-sub">男性ボイス</span>
-                    </div>
-                    {isIchiroSelected && <span className="voice-card-badge">選択中</span>}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => selectPredefinedVoice("haruka")}
-                    className={`voice-card-btn ${isHarukaSelected ? "active" : ""}`}
-                    title="遥か（女性ボイス）に切り替え"
-                  >
-                    <span className="voice-card-avatar">👩</span>
-                    <div className="voice-card-text">
-                      <span className="voice-card-title">遥か</span>
-                      <span className="voice-card-sub">女性ボイス</span>
-                    </div>
-                    {isHarukaSelected && <span className="voice-card-badge">選択中</span>}
-                  </button>
-                </div>
-
-                {/* 詳細全ボイスリスト（環境別全音声ドロップダウン） */}
-                <div style={{ marginTop: "6px" }}>
-                  <select
-                    value={selectedVoiceIdx}
-                    onChange={handleVoiceChange}
-                    className="select-field"
-                    title="インストール済み全音声リストから直接指定"
-                  >
-                    {voices.map((v, i) => (
-                      <option key={i} value={i}>
-                        {v.name} ({v.lang})
-                      </option>
-                    ))}
-                    {!voices.length && <option value="0">音声読み込み中...</option>}
-                  </select>
-                </div>
               </div>
-
-              {/* Speed slider */}
-              <div className="setting-row">
-                <div className="setting-label-row">
-                  <span>話速</span>
-                  <span>{speed.toFixed(1)}x</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="3.0"
-                  step="0.1"
-                  value={speed}
-                  onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                />
-              </div>
-
-              {/* Pitch slider */}
-              <div className="setting-row">
-                <div className="setting-label-row">
-                  <span>ピッチ (高低)</span>
-                  <span>{pitch.toFixed(1)}x</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="2.0"
-                  step="0.1"
-                  value={pitch}
-                  onChange={(e) => setPitch(parseFloat(e.target.value))}
-                />
-              </div>
-
-              {/* Volume slider */}
-              <div className="setting-row">
-                <div className="setting-label-row">
-                  <span>音量</span>
-                  <span>{volume}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={volume}
-                  onChange={(e) => setVolume(parseInt(e.target.value))}
-                />
-              </div>
-
-              {/* Preset Label Rename */}
-              <div className="setting-row">
-                <label className="field-label">選択中のプリセット名</label>
-                <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-                  <input
-                    type="text"
-                    className="select-field"
-                    style={{ flex: 1, padding: "6px 10px", boxSizing: "border-box" }}
-                    value={tempPresetLabel}
-                    onChange={(e) => setTempPresetLabel(e.target.value)}
-                    placeholder="新しいプリセット名..."
-                  />
-                  <button
-                    onClick={handleSavePresetName}
-                    className="btn-action"
-                    style={{
-                      flexShrink: 0,
-                      padding: "6px 12px",
-                      borderStyle: "solid",
-                      borderColor: "var(--bg-btn-primary)",
-                      color: "var(--bg-btn-primary)"
-                    }}
-                  >
-                    決定
-                  </button>
-                </div>
-              </div>
-
-              {/* Info Box */}
-              <div className="info-alert">
-                <HelpCircle size={12} style={{ flexShrink: 0, marginTop: "1px" }} />
-                <span>
-                  「クリップボードを読み上げる」はコピーした文章を自動取得して再生します。テキスト入力欄を展開して直接編集・再生することも可能です。
-                </span>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -985,16 +860,15 @@ export default function App() {
           <div className="tab-pane">
             {/* スロット選択タブ */}
             <div className="setting-row">
-              <label className="field-label">キャラクター・スロット選択（全3スロット保存）</label>
+              <label className="field-label">動画スロット選択（全3スロット保存）</label>
               <div className="slot-grid">
                 {[0, 1, 2].map((i) => (
                   <button
                     key={i}
-                    onClick={() => switchCharacterSlot(i)}
+                    onClick={() => switchVidSlot(i)}
                     className={`slot-btn ${vidSlot === i ? "active" : ""}`}
-                    title={`スロット${i + 1}: ${slotNames[i]}`}
                   >
-                    {slotNames[i] || `スロット ${i + 1}`}
+                    スロット {i + 1}
                   </button>
                 ))}
               </div>
@@ -1048,79 +922,43 @@ export default function App() {
             {/* 動画表示サイズ設定（カオルさまご要望機能） */}
             <div className="setting-row" style={{ marginTop: "10px" }}>
               <div className="setting-label-row">
-                <span>動画の表示サイズ上限（高さ指定モード時）</span>
+                <span>動画の表示サイズ（高さ・横幅）</span>
                 <span>{vidHeight}px</span>
               </div>
               <div className="size-presets-grid" style={{ marginBottom: "6px" }}>
                 <button
-                  onClick={() => changeVidHeight(200)}
-                  className={`slot-btn ${vidHeight === 200 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(180)}
+                  className={`slot-btn ${vidHeight === 180 ? "active" : ""}`}
                 >
-                  小 (200)
+                  小 (180)
+                </button>
+                <button
+                  onClick={() => changeVidHeight(260)}
+                  className={`slot-btn ${vidHeight === 260 ? "active" : ""}`}
+                >
+                  中 (260)
                 </button>
                 <button
                   onClick={() => changeVidHeight(340)}
                   className={`slot-btn ${vidHeight === 340 ? "active" : ""}`}
                 >
-                  中 (340)
+                  幅フィット (340)
                 </button>
                 <button
-                  onClick={() => changeVidHeight(480)}
-                  className={`slot-btn ${vidHeight === 480 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(420)}
+                  className={`slot-btn ${vidHeight === 420 ? "active" : ""}`}
                 >
-                  大 (480)
-                </button>
-                <button
-                  onClick={() => changeVidHeight(620)}
-                  className={`slot-btn ${vidHeight === 620 ? "active" : ""}`}
-                >
-                  特大 (620)
+                  大 (420)
                 </button>
               </div>
               <input
                 type="range"
-                min="160"
-                max="720"
+                min="140"
+                max="480"
                 step="10"
                 value={vidHeight}
                 onChange={(e) => changeVidHeight(parseInt(e.target.value))}
               />
-            </div>
-
-            {/* 表示フィット切替ボタン（上下ノーカット全幅 ↔ 枠内全幅カバー ↔ 全体収容） */}
-            <div className="setting-row" style={{ marginTop: "6px" }}>
-              <button
-                onClick={toggleVidFitMode}
-                className="btn-action"
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  fontSize: "0.85em",
-                  borderColor: "var(--border-btn-secondary)"
-                }}
-              >
-                {vidFitMode === "auto"
-                  ? "📐 表示形式：上下ノーカット全幅（上下・左右切れ目なし全部表示）"
-                  : vidFitMode === "cover"
-                  ? "✂️ 表示形式：枠内全幅カバー（高さを固定し上下クロップ）"
-                  : "🔲 表示形式：全体収容モード（等倍比率枠内収容）"}
-              </button>
-            </div>
-
-            {/* 動画枠の折りたたみ切替ボタン */}
-            <div className="setting-row" style={{ marginTop: "6px" }}>
-              <button
-                onClick={toggleVidCollapse}
-                className="btn-action"
-                style={{
-                  width: "100%",
-                  padding: "7px 10px",
-                  fontSize: "0.85em",
-                  borderColor: "var(--border-btn-secondary)"
-                }}
-              >
-                {isVidCollapsed ? "🎬 アバター動画を展開する" : "▲ アバター動画を折りたたむ"}
-              </button>
             </div>
 
             {/* 口パク動画連動トグル */}
@@ -1156,10 +994,10 @@ export default function App() {
               </button>
             </div>
 
-            {/* 動画再生速度スライダー（スロット別個別保存対応） */}
+            {/* 動画再生速度スライダー */}
             <div className="setting-row" style={{ marginTop: "10px" }}>
               <div className="setting-label-row">
-                <span>動画再生速度 (スロット {vidSlot} 個別保存)</span>
+                <span>動画再生速度</span>
                 <span>{vidSpeed.toFixed(2)}x</span>
               </div>
               <input
@@ -1168,7 +1006,7 @@ export default function App() {
                 max="2.5"
                 step="0.05"
                 value={vidSpeed}
-                onChange={(e) => handleVidSpeedChange(parseFloat(e.target.value))}
+                onChange={(e) => setVidSpeed(parseFloat(e.target.value))}
               />
             </div>
 
