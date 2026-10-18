@@ -184,22 +184,11 @@ export default function App() {
     localStorage.setItem("solid-tts-vid-fit", next);
   };
 
-  // 動画の折りたたみトグル（動画を閉じる時は下のパネルも追従し、PWAウィンドウも自動リサイズ）
+  // 動画の折りたたみトグル
   const toggleVidCollapse = () => {
     setIsVidCollapsed(prev => {
       const next = !prev;
       localStorage.setItem("solid-tts-vid-collapsed", next ? "1" : "0");
-      if (next) {
-        setIsTextareaExpanded(false);
-        setIsCollapsed(true);
-      }
-      // PWAウィンドウの自動リサイズ追従（カオルさまご要望機能）
-      try {
-        if (window.resizeTo && window.outerWidth) {
-          const targetH = next ? 340 : 920;
-          window.resizeTo(window.outerWidth, targetH);
-        }
-      } catch (e) {}
       return next;
     });
   };
@@ -645,117 +634,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* キャラクター・スロット切替バー (最上部固定・カオルさまご要望機能) */}
-      <div className="character-slot-bar">
-        {[0, 1, 2].map((idx) => (
-          <button
-            key={idx}
-            onClick={() => switchCharacterSlot(idx)}
-            className={`character-slot-btn ${vidSlot === idx ? "active" : ""}`}
-            title={`スロット${idx + 1}: ${slotNames[idx]} に切替（動画・音声・速度を完全同期）`}
-          >
-            <span className="slot-btn-num">{idx + 1}</span>
-            <span>{slotNames[idx]}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合に常時上部へ表示） */}
-      {videoBlobUrl && vidVisible && (
-        <>
-          <div
-            className={`avatar-video-wrapper ${isVidCollapsed ? "collapsed" : ""}`}
-            style={{
-              maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "none" : `${vidHeight}px`)
-            }}
-          >
-            <video
-              ref={videoRef}
-              src={videoBlobUrl}
-              loop
-              muted
-              playsInline
-              onClick={handleVideoClick}
-              className={`avatar-video-element fit-${vidFitMode}`}
-              style={{
-                cursor: "pointer",
-                maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "none" : `${vidHeight}px`)
-              }}
-              title="クリックで一時停止 / 再生"
-            />
-            {/* 右上クイックサイズ＆フィット切り替えボタン */}
-            {!isVidCollapsed && (
-              <div className="avatar-size-bar">
-                <button
-                  onClick={toggleVidFitMode}
-                  className="btn-size-toggle"
-                  title="表示形式切替（上下ノーカット全幅 ↔ 枠内全幅 ↔ 全体収容）"
-                  style={{ marginRight: "4px" }}
-                >
-                  {vidFitMode === "auto" ? "📐 上下ノーカット" : vidFitMode === "cover" ? "✂️ 枠内全幅" : "🔲 全体収容"}
-                </button>
-                <button
-                  onClick={toggleVidCollapse}
-                  className="btn-size-toggle"
-                  title="動画を閉じる"
-                >
-                  <ChevronUp size={11} /> 閉じる
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* 動画が折りたたまれている時の展開バー（カオルさまご要望機能） */}
-          {isVidCollapsed && (
-            <div
-              onClick={toggleVidCollapse}
-              className="avatar-collapse-bar"
-              title="動画を展開する"
-            >
-              <ChevronDown size={13} />
-              <span>🎬 アバター動画を展開する</span>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── 常時表示共通プレイヤーストリップ (再生、一時停止、全停止) ── */}
-      <div className="global-player-strip">
-        <button onClick={readClipboard} className="global-player-clip-btn" title="クリップボードの文章を即時読み上げ">
-          <Clipboard size={14} />
-          <span>📋 クリップボードを読み上げる</span>
-        </button>
-        <div className="global-player-actions">
-          <button
-            onClick={() => startSpeaking(textToRead)}
-            disabled={!textToRead.trim()}
-            className="btn-action"
-            title="テキストを再生"
-          >
-            <Play size={11} />
-            再生
-          </button>
-          <button
-            onClick={togglePause}
-            disabled={status === "待機中"}
-            className="btn-action"
-            style={{
-              background: isPaused ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-              color: isPaused ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
-            }}
-            title="一時停止 / 再開"
-          >
-            <Pause size={11} />
-            {isPaused ? "再開" : "一時停止"}
-          </button>
-          <button onClick={stopSpeaking} className="btn-action btn-stop" title="全停止">
-            <Square size={11} />
-            全停止
-          </button>
-        </div>
-      </div>
-
-      {/* ── タブナビゲーション（プレイヤーストリップの直下・カオルさまご要望機能） ── */}
+      {/* ── タブナビゲーション（最上部固定・常に100%直接表示） ── */}
       <div className="tabs-container">
         <button
           onClick={() => setActiveTab("voice")}
@@ -793,6 +672,115 @@ export default function App() {
       <div className="panel-content">
         {activeTab === "voice" && (
           <div className="tab-pane">
+            {/* キャラクター・スロット切替バー (動画・音声・速度を完全同期) */}
+            <div className="character-slot-bar" style={{ borderRadius: "6px", marginBottom: "4px" }}>
+              {[0, 1, 2].map((idx) => (
+                <button
+                  key={idx}
+                  onClick={() => switchCharacterSlot(idx)}
+                  className={`character-slot-btn ${vidSlot === idx ? "active" : ""}`}
+                  title={`スロット${idx + 1}: ${slotNames[idx]} に切替（動画・音声・速度を完全同期）`}
+                >
+                  <span className="slot-btn-num">{idx + 1}</span>
+                  <span>{slotNames[idx]}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合） */}
+            {videoBlobUrl && vidVisible && (
+              <div style={{ marginBottom: "6px" }}>
+                <div
+                  className={`avatar-video-wrapper ${isVidCollapsed ? "collapsed" : ""}`}
+                  style={{
+                    maxHeight: isVidCollapsed ? "0px" : `${Math.min(vidHeight, 260)}px`,
+                    position: "relative"
+                  }}
+                >
+                  <video
+                    ref={videoRef}
+                    src={videoBlobUrl}
+                    loop
+                    muted
+                    playsInline
+                    onClick={handleVideoClick}
+                    className={`avatar-video-element fit-${vidFitMode}`}
+                    style={{
+                      cursor: "pointer",
+                      maxHeight: isVidCollapsed ? "0px" : `${Math.min(vidHeight, 260)}px`
+                    }}
+                    title="クリックで一時停止 / 再生"
+                  />
+                  {!isVidCollapsed && (
+                    <div className="avatar-size-bar">
+                      <button
+                        onClick={toggleVidFitMode}
+                        className="btn-size-toggle"
+                        title="表示形式切替"
+                        style={{ marginRight: "4px" }}
+                      >
+                        {vidFitMode === "auto" ? "📐 全幅" : vidFitMode === "cover" ? "✂️ カバー" : "🔲 収容"}
+                      </button>
+                      <button
+                        onClick={toggleVidCollapse}
+                        className="btn-size-toggle"
+                        title="動画を閉じる"
+                      >
+                        <ChevronUp size={11} /> 閉じる
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {isVidCollapsed && (
+                  <div
+                    onClick={toggleVidCollapse}
+                    className="avatar-collapse-bar"
+                    title="動画を展開する"
+                    style={{ marginTop: "4px" }}
+                  >
+                    <ChevronDown size={13} />
+                    <span>🎬 アバター動画を展開する</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* プレイヤーストリップ (クリップボード読上、再生、一時停止、全停止) */}
+            <div className="global-player-strip" style={{ margin: "2px 0 6px 0", borderRadius: "6px" }}>
+              <button onClick={readClipboard} className="global-player-clip-btn" title="クリップボードの文章を即時読み上げ">
+                <Clipboard size={14} />
+                <span>📋 クリップボードを読み上げる</span>
+              </button>
+              <div className="global-player-actions">
+                <button
+                  onClick={() => startSpeaking(textToRead)}
+                  disabled={!textToRead.trim()}
+                  className="btn-action"
+                  title="テキストを再生"
+                >
+                  <Play size={11} />
+                  再生
+                </button>
+                <button
+                  onClick={togglePause}
+                  disabled={status === "待機中"}
+                  className="btn-action"
+                  style={{
+                    background: isPaused ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+                    color: isPaused ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
+                  }}
+                  title="一時停止 / 再開"
+                >
+                  <Pause size={11} />
+                  {isPaused ? "再開" : "一時停止"}
+                </button>
+                <button onClick={stopSpeaking} className="btn-action btn-stop" title="全停止">
+                  <Square size={11} />
+                  全停止
+                </button>
+              </div>
+            </div>
             {/* キャラクター名（スロット表示名）編集バー */}
             <div className="setting-row" style={{ marginBottom: "10px" }}>
               <div className="setting-label-row">
@@ -981,44 +969,11 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Textarea collapse toggle */}
-              <button
-                onClick={() => setIsTextareaExpanded(!isTextareaExpanded)}
-                className="btn-action"
-                style={{
-                  width: "100%",
-                  marginTop: "4px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "6px",
-                  borderStyle: "dashed",
-                  borderColor: "var(--border-btn-secondary)"
-                }}
-              >
-                <Edit3 size={11} />
-                {isTextareaExpanded ? "✏️ テキスト入力欄を閉じる" : "✏️ テキスト入力欄を展開"}
-                {isTextareaExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              </button>
-
-              {/* Input area */}
-              {isTextareaExpanded && (
-                <div className="text-area-container">
-                  <label className="field-label">読み上げテキスト</label>
-                  <textarea
-                    value={textToRead}
-                    onChange={(e) => setTextToRead(e.target.value)}
-                    placeholder="ここにテキストを入力するか、貼り付けて再生してください..."
-                    className="textarea-field"
-                  />
-                </div>
-              )}
-
               {/* Info Box */}
               <div className="info-alert">
                 <HelpCircle size={12} style={{ flexShrink: 0, marginTop: "1px" }} />
                 <span>
-                  「クリップボードを読み上げる」はコピーした文章を自動取得して再生します。入力ボックスへ貼り付け・直接編集して通常の「再生」を行うことも可能です。
+                  「クリップボードを読み上げる」はコピーした文章を自動取得して再生します。テキスト入力欄を展開して直接編集・再生することも可能です。
                 </span>
               </div>
             </div>
