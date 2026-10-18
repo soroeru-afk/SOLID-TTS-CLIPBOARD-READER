@@ -118,12 +118,20 @@ export default function App() {
   // =============================================
   // アバター動画（口パク動画）State & 制御
   // =============================================
+  const getSlotVidSpeed = (slot: number) => {
+    const v = localStorage.getItem(`solid-tts-vid-speed-slot-${slot}`);
+    if (v) return parseFloat(v);
+    const old = localStorage.getItem("solid-tts-vid-speed");
+    return old ? parseFloat(old) : 1.25;
+  };
+
   const [vidSlot, setVidSlot] = useState(() => {
     const v = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
     return isNaN(v) || v < 0 || v >= VID_SLOT_COUNT ? 0 : v;
   });
-  const [vidSpeed, setVidSpeed] = useState(() => parseFloat(localStorage.getItem("solid-tts-vid-speed") || "1.25"));
-  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "340")); // デフォルト幅フィット340px
+  const [vidSpeed, setVidSpeed] = useState(() => getSlotVidSpeed(vidSlot));
+  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "400")); // デフォルト幅フィット400px
+  const [vidFitMode, setVidFitMode] = useState<"cover" | "contain">(() => (localStorage.getItem("solid-tts-vid-fit") as "cover" | "contain") || "cover"); // デフォルト黒帯なし全幅
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
   const [vidVisible, setVidVisible] = useState(() => localStorage.getItem("solid-tts-vid-visible") !== "0"); // デフォルトON
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
@@ -154,13 +162,41 @@ export default function App() {
     if (videoRef.current) {
       videoRef.current.playbackRate = vidSpeed;
     }
-    localStorage.setItem("solid-tts-vid-speed", String(vidSpeed));
   }, [vidSpeed, videoBlobUrl]);
 
   // 動画表示高さの保存
   const changeVidHeight = (h: number) => {
     setVidHeight(h);
     localStorage.setItem("solid-tts-vid-height", String(h));
+  };
+
+  // 全幅フィット（cover / contain）の切り替え
+  const toggleVidFitMode = () => {
+    const next = vidFitMode === "cover" ? "contain" : "cover";
+    setVidFitMode(next);
+    localStorage.setItem("solid-tts-vid-fit", next);
+  };
+
+  // スロットごとの動画再生速度変更
+  const handleVidSpeedChange = (spd: number) => {
+    setVidSpeed(spd);
+    localStorage.setItem(`solid-tts-vid-speed-slot-${vidSlot}`, String(spd));
+    localStorage.setItem("solid-tts-vid-speed", String(spd));
+    if (videoRef.current) {
+      videoRef.current.playbackRate = spd;
+    }
+  };
+
+  // スロット切り替え（スロットごとの再生速度も自動復元）
+  const switchVidSlot = (idx: number) => {
+    pauseAvatarVideo();
+    setVidSlot(idx);
+    localStorage.setItem("solid-tts-vid-slot", String(idx));
+    const slotSpd = getSlotVidSpeed(idx);
+    setVidSpeed(slotSpd);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = slotSpd;
+    }
   };
 
   // アバター動画の再生・一時停止処理
@@ -181,12 +217,6 @@ export default function App() {
     if (vid && !vid.paused) {
       vid.pause();
     }
-  };
-
-  const switchVidSlot = (idx: number) => {
-    pauseAvatarVideo();
-    setVidSlot(idx);
-    localStorage.setItem("solid-tts-vid-slot", String(idx));
   };
 
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -617,18 +647,26 @@ export default function App() {
             loop
             muted
             playsInline
-            className="avatar-video-element"
+            className={`avatar-video-element fit-${vidFitMode}`}
             style={{ maxHeight: `${vidHeight}px` }}
           />
-          {/* 右上クイックサイズ切り替えボタン */}
+          {/* 右上クイックサイズ＆フィット切り替えボタン */}
           <div className="avatar-size-bar">
             <button
-              onClick={() => changeVidHeight(vidHeight >= 340 ? 180 : 340)}
+              onClick={toggleVidFitMode}
               className="btn-size-toggle"
-              title={vidHeight >= 340 ? "標準サイズ(180px)に縮小" : "全幅フィット(340px)に拡大"}
+              title={vidFitMode === "cover" ? "全体収容(黒帯あり)に切替" : "横幅100%全幅フィット(黒帯なし)に切替"}
+              style={{ marginRight: "4px" }}
             >
-              {vidHeight >= 340 ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
-              {vidHeight >= 340 ? "縮小" : "全幅フィット"}
+              {vidFitMode === "cover" ? "全幅フィット中" : "全体表示中"}
+            </button>
+            <button
+              onClick={() => changeVidHeight(vidHeight >= 400 ? 200 : 400)}
+              className="btn-size-toggle"
+              title={vidHeight >= 400 ? "標準サイズ(200px)に縮小" : "特大サイズ(400px)に拡大"}
+            >
+              {vidHeight >= 400 ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+              {vidHeight >= 400 ? "縮小" : "特大拡大"}
             </button>
           </div>
         </div>
@@ -927,38 +965,54 @@ export default function App() {
               </div>
               <div className="size-presets-grid" style={{ marginBottom: "6px" }}>
                 <button
-                  onClick={() => changeVidHeight(180)}
-                  className={`slot-btn ${vidHeight === 180 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(200)}
+                  className={`slot-btn ${vidHeight === 200 ? "active" : ""}`}
                 >
-                  小 (180)
+                  小 (200)
                 </button>
                 <button
-                  onClick={() => changeVidHeight(260)}
-                  className={`slot-btn ${vidHeight === 260 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(300)}
+                  className={`slot-btn ${vidHeight === 300 ? "active" : ""}`}
                 >
-                  中 (260)
+                  中 (300)
                 </button>
                 <button
-                  onClick={() => changeVidHeight(340)}
-                  className={`slot-btn ${vidHeight === 340 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(400)}
+                  className={`slot-btn ${vidHeight === 400 ? "active" : ""}`}
                 >
-                  幅フィット (340)
+                  幅フィット (400)
                 </button>
                 <button
-                  onClick={() => changeVidHeight(420)}
-                  className={`slot-btn ${vidHeight === 420 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(520)}
+                  className={`slot-btn ${vidHeight === 520 ? "active" : ""}`}
                 >
-                  大 (420)
+                  特大 (520)
                 </button>
               </div>
               <input
                 type="range"
-                min="140"
-                max="480"
+                min="160"
+                max="560"
                 step="10"
                 value={vidHeight}
                 onChange={(e) => changeVidHeight(parseInt(e.target.value))}
               />
+            </div>
+
+            {/* 表示フィット切替ボタン（黒帯なし全幅フィット ↔ 全体等倍表示） */}
+            <div className="setting-row" style={{ marginTop: "6px" }}>
+              <button
+                onClick={toggleVidFitMode}
+                className="btn-action"
+                style={{
+                  width: "100%",
+                  padding: "7px 10px",
+                  fontSize: "0.85em",
+                  borderColor: "var(--border-btn-secondary)"
+                }}
+              >
+                {vidFitMode === "cover" ? "📐 表示形式：横幅100%全幅フィット (黒帯なし)" : "📐 表示形式：全体収容モード (等倍比率)"}
+              </button>
             </div>
 
             {/* 口パク動画連動トグル */}
@@ -994,10 +1048,10 @@ export default function App() {
               </button>
             </div>
 
-            {/* 動画再生速度スライダー */}
+            {/* 動画再生速度スライダー（スロット別個別保存対応） */}
             <div className="setting-row" style={{ marginTop: "10px" }}>
               <div className="setting-label-row">
-                <span>動画再生速度</span>
+                <span>動画再生速度 (スロット {vidSlot} 個別保存)</span>
                 <span>{vidSpeed.toFixed(2)}x</span>
               </div>
               <input
@@ -1006,7 +1060,7 @@ export default function App() {
                 max="2.5"
                 step="0.05"
                 value={vidSpeed}
-                onChange={(e) => setVidSpeed(parseFloat(e.target.value))}
+                onChange={(e) => handleVidSpeedChange(parseFloat(e.target.value))}
               />
             </div>
 
