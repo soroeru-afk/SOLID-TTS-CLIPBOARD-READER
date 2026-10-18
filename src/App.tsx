@@ -122,7 +122,14 @@ export default function App() {
     const v = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
     return isNaN(v) || v < 0 || v >= VID_SLOT_COUNT ? 0 : v;
   });
-  const [vidSpeed, setVidSpeed] = useState(() => parseFloat(localStorage.getItem("solid-tts-vid-speed") || "1.25"));
+  const getSlotVidSpeed = (slot: number) => {
+    const v = localStorage.getItem(`solid-tts-vid-speed-slot-${slot}`);
+    if (v) return parseFloat(v);
+    const old = localStorage.getItem("solid-tts-vid-speed");
+    return old ? parseFloat(old) : 1.25;
+  };
+
+  const [vidSpeed, setVidSpeed] = useState(() => getSlotVidSpeed(vidSlot));
   const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "340")); // デフォルト幅フィット340px
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
   const [vidVisible, setVidVisible] = useState(() => localStorage.getItem("solid-tts-vid-visible") !== "0"); // デフォルトON
@@ -183,10 +190,24 @@ export default function App() {
     }
   };
 
+  const handleVidSpeedChange = (spd: number) => {
+    setVidSpeed(spd);
+    localStorage.setItem(`solid-tts-vid-speed-slot-${vidSlot}`, String(spd));
+    localStorage.setItem("solid-tts-vid-speed", String(spd));
+    if (videoRef.current) {
+      videoRef.current.playbackRate = spd;
+    }
+  };
+
   const switchVidSlot = (idx: number) => {
     pauseAvatarVideo();
     setVidSlot(idx);
     localStorage.setItem("solid-tts-vid-slot", String(idx));
+    const slotSpd = getSlotVidSpeed(idx);
+    setVidSpeed(slotSpd);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = slotSpd;
+    }
   };
 
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1006,7 +1027,7 @@ export default function App() {
                 max="2.5"
                 step="0.05"
                 value={vidSpeed}
-                onChange={(e) => setVidSpeed(parseFloat(e.target.value))}
+                onChange={(e) => handleVidSpeedChange(parseFloat(e.target.value))}
               />
             </div>
 
