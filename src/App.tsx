@@ -7,7 +7,17 @@ const THEMES = {
   dark: { label: "ダーク" },
   pastel: { label: "モノトーン" },
   brown: { label: "ブラウン" },
-  ocean: { label: "オーシャン" }
+  pink: { label: "パステルピンク" }
+};
+
+// ヘッダー＆ブラウザ/PWA theme-color 動的同期マッピング
+const THEME_HEADER_COLORS: Record<string, string> = {
+  light: "#f1f3f4",
+  dark: "#1b1b2a",
+  pastel: "#111111",
+  brown: "#4c2c19",
+  pink: "#3a2528",
+  ocean: "#3a2528"
 };
 
 const FONTS = {
@@ -66,7 +76,10 @@ const deleteVidFromDB = (slotN: number): Promise<void> =>
 
 export default function App() {
   // Load settings from localStorage
-  const [theme, setTheme] = useState(() => localStorage.getItem("aist-tts-theme") || "dark");
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("aist-tts-theme") || "dark";
+    return saved === "ocean" ? "pink" : saved;
+  });
   const [font, setFont] = useState(() => localStorage.getItem("aist-tts-font") || "mono");
   const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem("aist-tts-font-size") || "13"));
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("aist-tts-active-tab") || "voice");
@@ -274,6 +287,16 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("aist-tts-theme", theme);
+
+    // ブラウザ/PWA最上部ヘッダーの <meta name="theme-color"> を動的同期
+    const headerColor = THEME_HEADER_COLORS[theme] || "#1b1b2a";
+    let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (!metaThemeColor) {
+      metaThemeColor = document.createElement("meta");
+      metaThemeColor.setAttribute("name", "theme-color");
+      document.head.appendChild(metaThemeColor);
+    }
+    metaThemeColor.setAttribute("content", headerColor);
   }, [theme]);
 
   // Reset collapse state when switching tabs
