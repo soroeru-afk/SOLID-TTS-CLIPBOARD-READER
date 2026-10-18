@@ -197,6 +197,16 @@ export default function App() {
     return v === "0" ? "mini" : "video";
   });
 
+  // 帯の色（黒 / 白）State
+  const [vidBgColor, setVidBgColor] = useState<"black" | "white">(() => {
+    return (localStorage.getItem("solid-tts-vid-bg") as "black" | "white") || "black";
+  });
+
+  const handleVidBgChange = (c: "black" | "white") => {
+    setVidBgColor(c);
+    localStorage.setItem("solid-tts-vid-bg", c);
+  };
+
   // ウィンドウサイズ記憶（ミュージックプレイヤー完全互換）
   const [windowSizes, setWindowSizes] = useState<Record<"video" | "mini", { width: number; height: number }>>(() => {
     try {
@@ -318,6 +328,16 @@ export default function App() {
       videoRef.current.playbackRate = spd;
     }
   };
+
+  // 動画が表示状態（DOMに存在）になり、かつ読み上げ中であれば自動で動画再生を再開（ミニモードから戻した時の再開バグ解消）
+  useEffect(() => {
+    if (viewMode === "video" && vidVisible && videoBlobUrl && status === "再生中" && !isPaused) {
+      const timer = setTimeout(() => {
+        playAvatarVideo();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [viewMode, vidVisible, videoBlobUrl, status, isPaused]);
 
   // スロット切り替え（動画・音声・速度を完全同期 ＆ シームレス・バトンタッチ）
   const switchCharacterSlot = async (idx: number) => {
@@ -913,6 +933,7 @@ export default function App() {
         <div
           className="avatar-video-wrapper"
           style={{
+            backgroundColor: vidBgColor === "white" ? "#ffffff" : "#000000",
             maxHeight: vidMode === "expanded" ? "none" : `${vidHeight}px`
           }}
         >
@@ -922,6 +943,11 @@ export default function App() {
             loop
             muted
             playsInline
+            onCanPlay={() => {
+              if (status === "再生中" && !isPaused) {
+                playAvatarVideo();
+              }
+            }}
             onClick={handleVideoClick}
             className={`avatar-video-element ${vidMode}`}
             style={{
@@ -930,8 +956,16 @@ export default function App() {
             }}
             title="クリックで一時停止 / 再生"
           />
-          {/* 右上ノーマル ↔ 拡大 切り替えボタン */}
+          {/* 右上ノーマル ↔ 拡大 切り替え ＆ 帯色切り替えボタン */}
           <div className="avatar-size-bar">
+            <button
+              onClick={() => handleVidBgChange(vidBgColor === "black" ? "white" : "black")}
+              className="btn-size-toggle"
+              title={vidBgColor === "black" ? "白帯に変更" : "黒帯に変更"}
+              style={{ fontSize: "10px" }}
+            >
+              {vidBgColor === "black" ? "帯: ⬛黒" : "帯: ⬜白"}
+            </button>
             <button
               onClick={toggleVidMode}
               className="btn-size-toggle"
@@ -1433,6 +1467,55 @@ export default function App() {
                       {item.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* 動画の帯（背景）カラー選択 */}
+              <div className="setting-row">
+                <label className="field-label" style={{ marginBottom: "6px" }}>
+                  動画の帯（背景）カラー
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <button
+                    onClick={() => handleVidBgChange("black")}
+                    className="btn-action"
+                    style={{
+                      padding: "6px 10px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      background: vidBgColor === "black" ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+                      color: vidBgColor === "black" ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
+                      borderColor: vidBgColor === "black" ? "transparent" : "var(--border-btn-secondary)",
+                      outline: vidBgColor === "black" ? "2px solid var(--bg-btn-primary)" : "none",
+                      borderRadius: "4px",
+                      fontWeight: vidBgColor === "black" ? "bold" : "normal"
+                    }}
+                  >
+                    <span style={{ display: "inline-block", width: "11px", height: "11px", borderRadius: "2px", background: "#000000", border: "1px solid #777" }} />
+                    <span>⬛ 黒帯 (ブラック)</span>
+                  </button>
+                  <button
+                    onClick={() => handleVidBgChange("white")}
+                    className="btn-action"
+                    style={{
+                      padding: "6px 10px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      background: vidBgColor === "white" ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+                      color: vidBgColor === "white" ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
+                      borderColor: vidBgColor === "white" ? "transparent" : "var(--border-btn-secondary)",
+                      outline: vidBgColor === "white" ? "2px solid var(--bg-btn-primary)" : "none",
+                      borderRadius: "4px",
+                      fontWeight: vidBgColor === "white" ? "bold" : "normal"
+                    }}
+                  >
+                    <span style={{ display: "inline-block", width: "11px", height: "11px", borderRadius: "2px", background: "#ffffff", border: "1px solid #999" }} />
+                    <span>⬜ 白帯 (ホワイト)</span>
+                  </button>
                 </div>
               </div>
 
