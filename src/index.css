@@ -194,8 +194,7 @@ body {
   border: none;
   background-color: var(--bg-panel);
   box-shadow: none;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   box-sizing: border-box;
   font-size: var(--font-size-current);
 }
@@ -302,8 +301,7 @@ body {
 
 .panel-content {
   flex: 1;
-  min-height: 180px;
-  padding: 12px 14px;
+  padding: 14px;
   overflow-y: auto;
   box-sizing: border-box;
   display: flex;
@@ -662,6 +660,7 @@ input[type="range"]::-moz-range-thumb {
 .avatar-video-element.fit-auto {
   width: 100%;
   height: auto;
+  max-height: calc(100vh - 185px);
   object-fit: contain;
   object-position: top center;
 }

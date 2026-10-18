@@ -84,8 +84,8 @@ export default function App() {
   const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem("aist-tts-font-size") || "13"));
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("aist-tts-active-tab") || "voice");
 
-  // Collapsible states (default to open for immediate accessibility)
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Collapsible states (default to collapsed)
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
 
   const [textToRead, setTextToRead] = useState("");
@@ -136,7 +136,7 @@ export default function App() {
   const speechQueue = useRef<string[]>([]);
   const currentChunkText = useRef<string>("");
   const currentChunkCharIndex = useRef<number>(0);
-  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "0")); // 0: 全表示（比率自動・上下ノーカット全幅）
+  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "480"));
   const [vidFitMode, setVidFitMode] = useState<"auto" | "cover" | "contain">(() => (localStorage.getItem("solid-tts-vid-fit") as "auto" | "cover" | "contain") || "auto"); // デフォルト上下ノーカット全幅
   const [isVidCollapsed, setIsVidCollapsed] = useState(() => localStorage.getItem("solid-tts-vid-collapsed") === "1"); // 動画折りたたみ状態
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
@@ -191,11 +191,12 @@ export default function App() {
       localStorage.setItem("solid-tts-vid-collapsed", next ? "1" : "0");
       if (next) {
         setIsTextareaExpanded(false);
+        setIsCollapsed(true);
       }
       // PWAウィンドウの自動リサイズ追従（カオルさまご要望機能）
       try {
         if (window.resizeTo && window.outerWidth) {
-          const targetH = next ? 560 : 960;
+          const targetH = next ? 340 : 920;
           window.resizeTo(window.outerWidth, targetH);
         }
       } catch (e) {}
@@ -331,9 +332,9 @@ export default function App() {
     metaThemeColor.setAttribute("content", headerColor);
   }, [theme]);
 
-  // Maintain open state when switching tabs for easy access
+  // Reset collapse state when switching tabs
   useEffect(() => {
-    setIsCollapsed(false);
+    setIsCollapsed(true);
   }, [activeTab]);
 
   useEffect(() => {
@@ -665,8 +666,7 @@ export default function App() {
           <div
             className={`avatar-video-wrapper ${isVidCollapsed ? "collapsed" : ""}`}
             style={{
-              maxHeight: isVidCollapsed ? "0px" : (vidHeight > 0 ? `${vidHeight}px` : "none"),
-              height: isVidCollapsed ? "0px" : (vidHeight > 0 ? `${vidHeight}px` : (vidFitMode === "auto" ? "auto" : "100%"))
+              maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "none" : `${vidHeight}px`)
             }}
           >
             <video
@@ -679,13 +679,11 @@ export default function App() {
               className={`avatar-video-element fit-${vidFitMode}`}
               style={{
                 cursor: "pointer",
-                maxHeight: isVidCollapsed ? "0px" : (vidHeight > 0 ? `${vidHeight}px` : "none"),
-                height: isVidCollapsed ? "0px" : (vidHeight > 0 ? `${vidHeight}px` : "auto"),
-                objectPosition: "top center"
+                maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "none" : `${vidHeight}px`)
               }}
               title="クリックで一時停止 / 再生"
             />
-            {/* 右上クイックサイズ＆フィット＆高さ調整ボタン（カオルさまご要望機能） */}
+            {/* 右上クイックサイズ＆フィット切り替えボタン */}
             {!isVidCollapsed && (
               <div className="avatar-size-bar">
                 <button
@@ -694,18 +692,7 @@ export default function App() {
                   title="表示形式切替（上下ノーカット全幅 ↔ 枠内全幅 ↔ 全体収容）"
                   style={{ marginRight: "4px" }}
                 >
-                  {vidFitMode === "auto" ? "📐 上下ノーカット全幅" : vidFitMode === "cover" ? "✂️ 枠内全幅" : "🔲 全体収容"}
-                </button>
-                <button
-                  onClick={() => {
-                    const nextH = vidHeight === 0 ? 380 : vidHeight === 380 ? 520 : 0;
-                    changeVidHeight(nextH);
-                  }}
-                  className="btn-size-toggle"
-                  title="動画の高さ切り替え（全高自動ノーカット ↔ 380px ↔ 520px）"
-                  style={{ marginRight: "4px" }}
-                >
-                  {vidHeight === 0 ? "↕️ 高さ: 全高(自動)" : `↕️ 高さ: ${vidHeight}px`}
+                  {vidFitMode === "auto" ? "📐 上下ノーカット" : vidFitMode === "cover" ? "✂️ 枠内全幅" : "🔲 全体収容"}
                 </button>
                 <button
                   onClick={toggleVidCollapse}
@@ -826,6 +813,39 @@ export default function App() {
                 }}
               />
             </div>
+
+            {/* Textarea collapse toggle */}
+            <button
+              onClick={() => setIsTextareaExpanded(!isTextareaExpanded)}
+              className="btn-action"
+              style={{
+                width: "100%",
+                marginTop: "2px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                borderStyle: "dashed",
+                borderColor: "var(--border-btn-secondary)"
+              }}
+            >
+              <Edit3 size={11} />
+              {isTextareaExpanded ? "✏️ テキスト入力欄を閉じる" : "✏️ テキスト入力欄を展開"}
+              {isTextareaExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+
+            {/* Input area */}
+            {isTextareaExpanded && (
+              <div className="text-area-container">
+                <label className="field-label">読み上げテキスト</label>
+                <textarea
+                  value={textToRead}
+                  onChange={(e) => setTextToRead(e.target.value)}
+                  placeholder="ここにテキストを入力するか、貼り付けて再生してください..."
+                  className="textarea-field"
+                />
+              </div>
+            )}
 
             {/* ── 音声設定（常時全表示・カオルさまご要望機能） ── */}
             <div className="settings-grid" style={{ paddingTop: "6px" }}>
@@ -1070,55 +1090,45 @@ export default function App() {
               </div>
             </div>
 
-            {/* 動画表示サイズ設定（任意で自由に調整可能・カオルさまご要望機能） */}
+            {/* 動画表示サイズ設定（カオルさまご要望機能） */}
             <div className="setting-row" style={{ marginTop: "10px" }}>
               <div className="setting-label-row">
-                <span>動画の表示高さ（任意調整）</span>
-                <span style={{ fontWeight: "bold", color: "var(--bg-btn-primary)" }}>
-                  {vidHeight === 0 ? "全高（自動・ノーカット全幅）" : `${vidHeight}px`}
-                </span>
+                <span>動画の表示サイズ上限（高さ指定モード時）</span>
+                <span>{vidHeight}px</span>
               </div>
-              <div className="size-presets-grid" style={{ marginBottom: "6px", gridTemplateColumns: "repeat(5, 1fr)" }}>
+              <div className="size-presets-grid" style={{ marginBottom: "6px" }}>
                 <button
-                  onClick={() => changeVidHeight(0)}
-                  className={`slot-btn ${vidHeight === 0 ? "active" : ""}`}
-                  title="比率自動・上下ノーカット全幅"
+                  onClick={() => changeVidHeight(200)}
+                  className={`slot-btn ${vidHeight === 200 ? "active" : ""}`}
                 >
-                  全高
+                  小 (200)
                 </button>
                 <button
-                  onClick={() => changeVidHeight(320)}
-                  className={`slot-btn ${vidHeight === 320 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(340)}
+                  className={`slot-btn ${vidHeight === 340 ? "active" : ""}`}
                 >
-                  320
+                  中 (340)
                 </button>
                 <button
-                  onClick={() => changeVidHeight(450)}
-                  className={`slot-btn ${vidHeight === 450 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(480)}
+                  className={`slot-btn ${vidHeight === 480 ? "active" : ""}`}
                 >
-                  450
+                  大 (480)
                 </button>
                 <button
-                  onClick={() => changeVidHeight(600)}
-                  className={`slot-btn ${vidHeight === 600 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(620)}
+                  className={`slot-btn ${vidHeight === 620 ? "active" : ""}`}
                 >
-                  600
-                </button>
-                <button
-                  onClick={() => changeVidHeight(750)}
-                  className={`slot-btn ${vidHeight === 750 ? "active" : ""}`}
-                >
-                  750
+                  特大 (620)
                 </button>
               </div>
               <input
                 type="range"
-                min="0"
-                max="900"
+                min="160"
+                max="720"
                 step="10"
                 value={vidHeight}
                 onChange={(e) => changeVidHeight(parseInt(e.target.value))}
-                title="0: 全高自動ノーカット全幅 / 100〜900px: 任意指定"
               />
             </div>
 
