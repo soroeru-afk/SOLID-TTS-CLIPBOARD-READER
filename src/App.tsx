@@ -130,8 +130,9 @@ export default function App() {
     return isNaN(v) || v < 0 || v >= VID_SLOT_COUNT ? 0 : v;
   });
   const [vidSpeed, setVidSpeed] = useState(() => getSlotVidSpeed(vidSlot));
-  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "400")); // デフォルト幅フィット400px
-  const [vidFitMode, setVidFitMode] = useState<"cover" | "contain">(() => (localStorage.getItem("solid-tts-vid-fit") as "cover" | "contain") || "cover"); // デフォルト黒帯なし全幅
+  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "480"));
+  const [vidFitMode, setVidFitMode] = useState<"auto" | "cover" | "contain">(() => (localStorage.getItem("solid-tts-vid-fit") as "auto" | "cover" | "contain") || "auto"); // デフォルト上下ノーカット全幅
+  const [isVidCollapsed, setIsVidCollapsed] = useState(() => localStorage.getItem("solid-tts-vid-collapsed") === "1"); // 動画折りたたみ状態
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
   const [vidVisible, setVidVisible] = useState(() => localStorage.getItem("solid-tts-vid-visible") !== "0"); // デフォルトON
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
@@ -170,11 +171,20 @@ export default function App() {
     localStorage.setItem("solid-tts-vid-height", String(h));
   };
 
-  // 全幅フィット（cover / contain）の切り替え
+  // 全幅フィット（auto: 上下ノーカット全幅 / cover: 枠内全幅カバー / contain: 全体収容）の切り替え
   const toggleVidFitMode = () => {
-    const next = vidFitMode === "cover" ? "contain" : "cover";
+    const next = vidFitMode === "auto" ? "cover" : vidFitMode === "cover" ? "contain" : "auto";
     setVidFitMode(next);
     localStorage.setItem("solid-tts-vid-fit", next);
+  };
+
+  // 動画の折りたたみトグル
+  const toggleVidCollapse = () => {
+    setIsVidCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem("solid-tts-vid-collapsed", next ? "1" : "0");
+      return next;
+    });
   };
 
   // スロットごとの動画再生速度変更
@@ -640,36 +650,56 @@ export default function App() {
 
       {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合に常時上部へ表示） */}
       {videoBlobUrl && vidVisible && (
-        <div className="avatar-video-wrapper" style={{ maxHeight: `${vidHeight}px` }}>
-          <video
-            ref={videoRef}
-            src={videoBlobUrl}
-            loop
-            muted
-            playsInline
-            className={`avatar-video-element fit-${vidFitMode}`}
-            style={{ maxHeight: `${vidHeight}px` }}
-          />
-          {/* 右上クイックサイズ＆フィット切り替えボタン */}
-          <div className="avatar-size-bar">
-            <button
-              onClick={toggleVidFitMode}
-              className="btn-size-toggle"
-              title={vidFitMode === "cover" ? "全体収容(黒帯あり)に切替" : "横幅100%全幅フィット(黒帯なし)に切替"}
-              style={{ marginRight: "4px" }}
-            >
-              {vidFitMode === "cover" ? "全幅フィット中" : "全体表示中"}
-            </button>
-            <button
-              onClick={() => changeVidHeight(vidHeight >= 400 ? 200 : 400)}
-              className="btn-size-toggle"
-              title={vidHeight >= 400 ? "標準サイズ(200px)に縮小" : "特大サイズ(400px)に拡大"}
-            >
-              {vidHeight >= 400 ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
-              {vidHeight >= 400 ? "縮小" : "特大拡大"}
-            </button>
+        <>
+          <div
+            className={`avatar-video-wrapper ${isVidCollapsed ? "collapsed" : ""}`}
+            style={{
+              maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "none" : `${vidHeight}px`)
+            }}
+          >
+            <video
+              ref={videoRef}
+              src={videoBlobUrl}
+              loop
+              muted
+              playsInline
+              className={`avatar-video-element fit-${vidFitMode}`}
+              style={{
+                maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "none" : `${vidHeight}px`)
+              }}
+            />
+            {/* 右上クイックサイズ＆フィット切り替えボタン */}
+            {!isVidCollapsed && (
+              <div className="avatar-size-bar">
+                <button
+                  onClick={toggleVidFitMode}
+                  className="btn-size-toggle"
+                  title="表示形式切替（上下ノーカット全幅 ↔ 枠内全幅 ↔ 全体収容）"
+                  style={{ marginRight: "4px" }}
+                >
+                  {vidFitMode === "auto" ? "📐 上下ノーカット" : vidFitMode === "cover" ? "✂️ 枠内全幅" : "🔲 全体収容"}
+                </button>
+                <button
+                  onClick={toggleVidCollapse}
+                  className="btn-size-toggle"
+                  title="動画を折りたたむ"
+                >
+                  <ChevronUp size={11} /> 閉じる
+                </button>
+              </div>
+            )}
           </div>
-        </div>
+
+          {/* 動画の一番下の折りたたみバー（カオルさまご要望機能） */}
+          <div
+            onClick={toggleVidCollapse}
+            className="avatar-collapse-bar"
+            title={isVidCollapsed ? "動画を展開" : "動画を折りたたむ"}
+          >
+            {isVidCollapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+            <span>{isVidCollapsed ? "🎬 アバター動画を展開する" : "▲ アバター動画を折りたたむ"}</span>
+          </div>
+        </>
       )}
 
       {/* Main Panel Content */}
@@ -960,7 +990,7 @@ export default function App() {
             {/* 動画表示サイズ設定（カオルさまご要望機能） */}
             <div className="setting-row" style={{ marginTop: "10px" }}>
               <div className="setting-label-row">
-                <span>動画の表示サイズ（高さ・横幅）</span>
+                <span>動画の表示サイズ上限（高さ指定モード時）</span>
                 <span>{vidHeight}px</span>
               </div>
               <div className="size-presets-grid" style={{ marginBottom: "6px" }}>
@@ -971,38 +1001,58 @@ export default function App() {
                   小 (200)
                 </button>
                 <button
-                  onClick={() => changeVidHeight(300)}
-                  className={`slot-btn ${vidHeight === 300 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(340)}
+                  className={`slot-btn ${vidHeight === 340 ? "active" : ""}`}
                 >
-                  中 (300)
+                  中 (340)
                 </button>
                 <button
-                  onClick={() => changeVidHeight(400)}
-                  className={`slot-btn ${vidHeight === 400 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(480)}
+                  className={`slot-btn ${vidHeight === 480 ? "active" : ""}`}
                 >
-                  幅フィット (400)
+                  大 (480)
                 </button>
                 <button
-                  onClick={() => changeVidHeight(520)}
-                  className={`slot-btn ${vidHeight === 520 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(620)}
+                  className={`slot-btn ${vidHeight === 620 ? "active" : ""}`}
                 >
-                  特大 (520)
+                  特大 (620)
                 </button>
               </div>
               <input
                 type="range"
                 min="160"
-                max="560"
+                max="720"
                 step="10"
                 value={vidHeight}
                 onChange={(e) => changeVidHeight(parseInt(e.target.value))}
               />
             </div>
 
-            {/* 表示フィット切替ボタン（黒帯なし全幅フィット ↔ 全体等倍表示） */}
+            {/* 表示フィット切替ボタン（上下ノーカット全幅 ↔ 枠内全幅カバー ↔ 全体収容） */}
             <div className="setting-row" style={{ marginTop: "6px" }}>
               <button
                 onClick={toggleVidFitMode}
+                className="btn-action"
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  fontSize: "0.85em",
+                  borderColor: "var(--border-btn-secondary)"
+                }}
+              >
+                {vidFitMode === "auto"
+                  ? "📐 表示形式：上下ノーカット全幅（上下・左右切れ目なし全部表示）"
+                  : vidFitMode === "cover"
+                  ? "✂️ 表示形式：枠内全幅カバー（高さを固定し上下クロップ）"
+                  : "🔲 表示形式：全体収容モード（等倍比率枠内収容）"}
+              </button>
+            </div>
+
+            {/* 動画枠の折りたたみ切替ボタン */}
+            <div className="setting-row" style={{ marginTop: "6px" }}>
+              <button
+                onClick={toggleVidCollapse}
                 className="btn-action"
                 style={{
                   width: "100%",
@@ -1011,7 +1061,7 @@ export default function App() {
                   borderColor: "var(--border-btn-secondary)"
                 }}
               >
-                {vidFitMode === "cover" ? "📐 表示形式：横幅100%全幅フィット (黒帯なし)" : "📐 表示形式：全体収容モード (等倍比率)"}
+                {isVidCollapsed ? "🎬 アバター動画を展開する" : "▲ アバター動画を折りたたむ"}
               </button>
             </div>
 

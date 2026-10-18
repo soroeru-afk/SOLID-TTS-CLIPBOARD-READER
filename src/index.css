@@ -513,20 +513,34 @@ input[type="range"]::-moz-range-thumb {
   border-bottom: 1px solid var(--border-app);
   flex-shrink: 0;
   position: relative;
-  transition: max-height 0.25s ease;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+.avatar-video-wrapper.collapsed {
+  max-height: 0 !important;
+  opacity: 0;
+  border-bottom: none;
+  pointer-events: none;
 }
 
 .avatar-video-element {
   width: 100%;
-  height: 100%;
   display: block;
 }
 
+.avatar-video-element.fit-auto {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
 .avatar-video-element.fit-cover {
+  height: 100%;
   object-fit: cover;
 }
 
 .avatar-video-element.fit-contain {
+  height: 100%;
   object-fit: contain;
 }
 
@@ -555,6 +569,62 @@ input[type="range"]::-moz-range-thumb {
 .btn-size-toggle:hover {
   background: rgba(0, 0, 0, 0.85);
   border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* 動画の一番下の折りたたみバー */
+.avatar-collapse-bar {
+  width: 100%;
+  padding: 5px 10px;
+  background-color: var(--bg-header);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-app);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: calc(var(--font-size-current) * 0.9);
+  font-weight: bold;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.avatar-collapse-bar:hover {
+  background-color: var(--bg-btn-secondary);
+  color: var(--text-primary);
+}
+
+/* 細いスクロールバー（Thin Scrollbar: カオルさまご要望機能） */
+.panel-content::-webkit-scrollbar,
+.app-container::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.panel-content::-webkit-scrollbar-track,
+.app-container::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-content::-webkit-scrollbar-thumb,
+.app-container::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: var(--border-btn-secondary);
+  border-radius: 4px;
+}
+
+.panel-content::-webkit-scrollbar-thumb:hover,
+.app-container::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-btn-primary);
+}
+
+.panel-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-btn-secondary) transparent;
 }
 
 .slot-grid {
