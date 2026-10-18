@@ -216,9 +216,30 @@ export default function App() {
     }
   };
 
-  // スロット切り替え（動画・音声・速度を完全同期）
-  const switchCharacterSlot = (idx: number) => {
-    pauseAvatarVideo();
+  // スロット切り替え（動画・音声・速度を完全同期 ＆ シームレス・バトンタッチ）
+  const switchCharacterSlot = async (idx: number) => {
+    const isSpeakingNow = status === "再生中" && !isPaused;
+
+    if (isSpeakingNow) {
+      // 1. 現在発声中のチャンクの未読部分をキュー先頭に復元
+      const curText = currentChunkText.current;
+      const charIdx = currentChunkCharIndex.current;
+      if (curText) {
+        const remaining = charIdx > 0 && charIdx < curText.length ? curText.slice(charIdx).trim() : curText.trim();
+        if (remaining) {
+          speechQueue.current.unshift(remaining);
+        }
+      }
+      currentChunkText.current = "";
+      currentChunkCharIndex.current = 0;
+
+      // 音声を瞬時カット
+      ttsGeneration.current++;
+      window.speechSynthesis.cancel();
+    } else {
+      pauseAvatarVideo();
+    }
+
     setVidSlot(idx);
     localStorage.setItem("solid-tts-vid-slot", String(idx));
 
@@ -242,9 +263,13 @@ export default function App() {
     setPitch(savedPitch);
     setVolume(savedVolume);
 
+    let nextVoice: SpeechSynthesisVoice | undefined;
     if (savedVoice && voices.length > 0) {
       const vIdx = voices.findIndex((v) => v.name === savedVoice);
-      if (vIdx >= 0) setSelectedVoiceIdx(vIdx);
+      if (vIdx >= 0) {
+        setSelectedVoiceIdx(vIdx);
+        nextVoice = voices[vIdx];
+      }
     } else if (voices.length > 0) {
       let vIdx = -1;
       if (savedPreset === "A") {
@@ -252,7 +277,23 @@ export default function App() {
       } else {
         vIdx = voices.findIndex((v) => /ichiro/i.test(v.name));
       }
-      if (vIdx >= 0) setSelectedVoiceIdx(vIdx);
+      if (vIdx >= 0) {
+        setSelectedVoiceIdx(vIdx);
+        nextVoice = voices[vIdx];
+      }
+    }
+
+    // 3. 動画のロード
+    await loadSlotVideo(idx);
+
+    // 4. シームレス・バトンタッチ再開（再生中だった場合）
+    if (isSpeakingNow && speechQueue.current.length > 0) {
+      setStatus("再生中");
+      playAvatarVideo();
+      const gen = ttsGeneration.current;
+      setTimeout(() => {
+        playNextChunk(gen, nextVoice, savedSpeed, savedPitch, savedVolume);
+      }, 50);
     }
   };
 
@@ -515,7 +556,13 @@ export default function App() {
     return () => clearInterval(interval);
   }, [status, isPaused]);
 
-  const playNextChunk = (gen: number) => {
+  const playNextChunk = (
+    gen: number,
+    optVoice?: SpeechSynthesisVoice,
+    optSpeed?: number,
+    optPitch?: number,
+    optVol?: number
+  ) => {
     if (gen !== ttsGeneration.current) return;
     if (!speechQueue.current.length) {
       currentChunkText.current = "";
@@ -530,16 +577,16 @@ export default function App() {
 
     const utter = new SpeechSynthesisUtterance(chunk);
 
-    const selectedVoice = voices[selectedVoiceIdx];
+    const selectedVoice = optVoice !== undefined ? optVoice : voices[selectedVoiceIdx];
     if (selectedVoice) {
       utter.voice = selectedVoice;
       utter.lang = selectedVoice.lang || "ja-JP";
     } else {
       utter.lang = "ja-JP";
     }
-    utter.rate = speed;
-    utter.pitch = pitch;
-    utter.volume = volume / 100;
+    utter.rate = optSpeed !== undefined ? optSpeed : speed;
+    utter.pitch = optPitch !== undefined ? optPitch : pitch;
+    utter.volume = (optVol !== undefined ? optVol : volume) / 100;
 
     // 単語/文字境界を記録して一時停止時の即時再開位置を追跡
     utter.onboundary = (e) => {
