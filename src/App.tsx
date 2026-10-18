@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff } from "lucide-react";
+import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2 } from "lucide-react";
 
 // Themes configuration
 const THEMES = {
@@ -68,7 +68,7 @@ export default function App() {
   // Load settings from localStorage
   const [theme, setTheme] = useState(() => localStorage.getItem("aist-tts-theme") || "dark");
   const [font, setFont] = useState(() => localStorage.getItem("aist-tts-font") || "mono");
-  const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem("aist-tts-font-size") || "11"));
+  const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem("aist-tts-font-size") || "13"));
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("aist-tts-active-tab") || "voice");
 
   // Collapsible states (default to collapsed)
@@ -112,6 +112,8 @@ export default function App() {
 
   const ttsGeneration = useRef(0);
   const speechQueue = useRef<string[]>([]);
+  const currentChunkText = useRef<string>("");
+  const currentChunkCharIndex = useRef<number>(0);
 
   // =============================================
   // アバター動画（口パク動画）State & 制御
@@ -121,10 +123,10 @@ export default function App() {
     return isNaN(v) || v < 0 || v >= VID_SLOT_COUNT ? 0 : v;
   });
   const [vidSpeed, setVidSpeed] = useState(() => parseFloat(localStorage.getItem("solid-tts-vid-speed") || "1.25"));
+  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "340")); // デフォルト幅フィット340px
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
   const [vidVisible, setVidVisible] = useState(() => localStorage.getItem("solid-tts-vid-visible") !== "0"); // デフォルトON
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
-  const [videoMimeType, setVideoMimeType] = useState<string>("video/mp4");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -135,7 +137,6 @@ export default function App() {
       if (blob) {
         const url = URL.createObjectURL(blob);
         setVideoBlobUrl(url);
-        setVideoMimeType(blob.type || "video/mp4");
       } else {
         setVideoBlobUrl(null);
       }
@@ -155,6 +156,12 @@ export default function App() {
     }
     localStorage.setItem("solid-tts-vid-speed", String(vidSpeed));
   }, [vidSpeed, videoBlobUrl]);
+
+  // 動画表示高さの保存
+  const changeVidHeight = (h: number) => {
+    setVidHeight(h);
+    localStorage.setItem("solid-tts-vid-height", String(h));
+  };
 
   // アバター動画の再生・一時停止処理
   const playAvatarVideo = () => {
@@ -295,7 +302,6 @@ export default function App() {
       let idx = jaVoices.findIndex((v) => v.name === savedName);
 
       if (idx < 0 && !savedName) {
-        // Fallback defaults for Ichiro / Haruka
         if (active === "A") {
           idx = jaVoices.findIndex((v) => /haruka/i.test(v.name));
         } else {
@@ -370,7 +376,7 @@ export default function App() {
   };
 
   // Text chunking for Web Speech API stability
-  const splitIntoChunks = (text: string, maxLen = 180): string[] => {
+  const splitIntoChunks = (text: string, maxLen = 140): string[] => {
     const sentences = text.split(/(?<=[。！？\n])/);
     const chunks: string[] = [];
     let cur = "";
@@ -420,11 +426,16 @@ export default function App() {
   const playNextChunk = (gen: number) => {
     if (gen !== ttsGeneration.current) return;
     if (!speechQueue.current.length) {
+      currentChunkText.current = "";
+      currentChunkCharIndex.current = 0;
       setStatus("待機中");
       pauseAvatarVideo(); // 読み上げキュー完了で動画自動停止！
       return;
     }
     const chunk = speechQueue.current.shift()!;
+    currentChunkText.current = chunk;
+    currentChunkCharIndex.current = 0;
+
     const utter = new SpeechSynthesisUtterance(chunk);
 
     const selectedVoice = voices[selectedVoiceIdx];
@@ -437,6 +448,13 @@ export default function App() {
     utter.rate = speed;
     utter.pitch = pitch;
     utter.volume = volume / 100;
+
+    // 単語/文字境界を記録して一時停止時の即時再開位置を追跡
+    utter.onboundary = (e) => {
+      if (e.charIndex !== undefined && e.charIndex > 0) {
+        currentChunkCharIndex.current = e.charIndex;
+      }
+    };
 
     utter.onstart = () => {
       if (gen === ttsGeneration.current) {
@@ -468,30 +486,54 @@ export default function App() {
     // 発声開始と同時に動画再生始動！
     playAvatarVideo();
 
-    setTimeout(() => playNextChunk(gen), 100);
+    setTimeout(() => playNextChunk(gen), 60);
   };
 
   const stopSpeaking = () => {
     ttsGeneration.current++;
     window.speechSynthesis.cancel();
     speechQueue.current = [];
+    currentChunkText.current = "";
+    currentChunkCharIndex.current = 0;
     setStatus("待機中");
     setIsPaused(false);
-    pauseAvatarVideo(); // 全停止で動画停止！
+    pauseAvatarVideo(); // 全停止で即時動画停止！
   };
 
+  // 一時停止 / 再開（即時レスポンス仕様）
   const togglePause = () => {
     if (status === "待機中") return;
+
     if (isPaused) {
-      window.speechSynthesis.resume();
+      // ── 再開 ──
       setIsPaused(false);
       setStatus("再生中");
-      playAvatarVideo(); // 一時停止解除で動画再開！
+      playAvatarVideo();
+
+      ttsGeneration.current++;
+      const gen = ttsGeneration.current;
+      setTimeout(() => playNextChunk(gen), 40);
     } else {
-      window.speechSynthesis.pause();
+      // ── 一時停止（0ms 即時消音＆即時動画停止） ──
+      pauseAvatarVideo();
       setIsPaused(true);
       setStatus("一時停止中");
-      pauseAvatarVideo(); // 一時停止で動画停止！
+
+      // 現在読み上げ中のチャンクの未読部分をキュー先頭に復元
+      const curText = currentChunkText.current;
+      const idx = currentChunkCharIndex.current;
+      if (curText) {
+        const remaining = idx > 0 && idx < curText.length ? curText.slice(idx).trim() : curText.trim();
+        if (remaining) {
+          speechQueue.current.unshift(remaining);
+        }
+      }
+      currentChunkText.current = "";
+      currentChunkCharIndex.current = 0;
+
+      // 世代を進めてコールバックを即時遮断し、cancel() で音声を瞬時にカット
+      ttsGeneration.current++;
+      window.speechSynthesis.cancel();
     }
   };
 
@@ -523,7 +565,7 @@ export default function App() {
             <button
               onClick={toggleVidVisible}
               className="btn-icon-subtle"
-              title={vidVisible ? "動画を非表示" : "動画を表示"}
+              title={vidVisible ? "動画枠を非表示" : "動画枠を表示"}
             >
               {vidVisible ? <Eye size={12} /> : <EyeOff size={12} />}
             </button>
@@ -549,8 +591,7 @@ export default function App() {
           className="tab-button"
           style={{
             background: activeTab === "avatar" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
-            color: activeTab === "avatar" ? "var(--text-tab-active)" : "var(--text-tab-inactive)",
-            position: "relative"
+            color: activeTab === "avatar" ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
           }}
         >
           🎬 アバター動画
@@ -569,7 +610,7 @@ export default function App() {
 
       {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合に常時上部へ表示） */}
       {videoBlobUrl && vidVisible && (
-        <div className="avatar-video-wrapper">
+        <div className="avatar-video-wrapper" style={{ maxHeight: `${vidHeight}px` }}>
           <video
             ref={videoRef}
             src={videoBlobUrl}
@@ -577,7 +618,19 @@ export default function App() {
             muted
             playsInline
             className="avatar-video-element"
+            style={{ maxHeight: `${vidHeight}px` }}
           />
+          {/* 右上クイックサイズ切り替えボタン */}
+          <div className="avatar-size-bar">
+            <button
+              onClick={() => changeVidHeight(vidHeight >= 340 ? 180 : 340)}
+              className="btn-size-toggle"
+              title={vidHeight >= 340 ? "標準サイズ(180px)に縮小" : "全幅フィット(340px)に拡大"}
+            >
+              {vidHeight >= 340 ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+              {vidHeight >= 340 ? "縮小" : "全幅フィット"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -621,6 +674,10 @@ export default function App() {
                 onClick={togglePause}
                 disabled={status === "待機中"}
                 className="btn-action"
+                style={{
+                  background: isPaused ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+                  color: isPaused ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
+                }}
               >
                 <Pause size={11} />
                 {isPaused ? "再開" : "一時停止"}
@@ -637,7 +694,7 @@ export default function App() {
               className="btn-action"
               style={{
                 width: "100%",
-                marginTop: "4px",
+                marginTop: "2px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -651,7 +708,7 @@ export default function App() {
               {isTextareaExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
 
-            {/* Input area - stretches to fill available height when expanded */}
+            {/* Input area */}
             {isTextareaExpanded && (
               <div className="text-area-container">
                 <label className="field-label">読み上げテキスト</label>
@@ -670,7 +727,7 @@ export default function App() {
               className="btn-action"
               style={{
                 width: "100%",
-                marginTop: "4px",
+                marginTop: "2px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -688,10 +745,10 @@ export default function App() {
             {!isCollapsed && (
               <div
                 className="space-y-4"
-                style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}
+                style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "6px" }}
               >
                 {/* Settings controls */}
-                <div className="settings-grid" style={{ paddingTop: "12px" }}>
+                <div className="settings-grid" style={{ paddingTop: "10px" }}>
                   {/* Voice select */}
                   <div className="setting-row">
                     <label className="field-label">ボイス</label>
@@ -818,7 +875,7 @@ export default function App() {
             </div>
 
             {/* ファイル選択 & 削除ボタン */}
-            <div className="setting-row" style={{ marginTop: "10px" }}>
+            <div className="setting-row" style={{ marginTop: "6px" }}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -862,8 +919,50 @@ export default function App() {
               </div>
             </div>
 
+            {/* 動画表示サイズ設定（カオルさまご要望機能） */}
+            <div className="setting-row" style={{ marginTop: "10px" }}>
+              <div className="setting-label-row">
+                <span>動画の表示サイズ（高さ・横幅）</span>
+                <span>{vidHeight}px</span>
+              </div>
+              <div className="size-presets-grid" style={{ marginBottom: "6px" }}>
+                <button
+                  onClick={() => changeVidHeight(180)}
+                  className={`slot-btn ${vidHeight === 180 ? "active" : ""}`}
+                >
+                  小 (180)
+                </button>
+                <button
+                  onClick={() => changeVidHeight(260)}
+                  className={`slot-btn ${vidHeight === 260 ? "active" : ""}`}
+                >
+                  中 (260)
+                </button>
+                <button
+                  onClick={() => changeVidHeight(340)}
+                  className={`slot-btn ${vidHeight === 340 ? "active" : ""}`}
+                >
+                  幅フィット (340)
+                </button>
+                <button
+                  onClick={() => changeVidHeight(420)}
+                  className={`slot-btn ${vidHeight === 420 ? "active" : ""}`}
+                >
+                  大 (420)
+                </button>
+              </div>
+              <input
+                type="range"
+                min="140"
+                max="480"
+                step="10"
+                value={vidHeight}
+                onChange={(e) => changeVidHeight(parseInt(e.target.value))}
+              />
+            </div>
+
             {/* 口パク動画連動トグル */}
-            <div className="setting-row" style={{ marginTop: "12px" }}>
+            <div className="setting-row" style={{ marginTop: "10px" }}>
               <button
                 onClick={toggleVidSync}
                 className="btn-action"
@@ -881,7 +980,7 @@ export default function App() {
             </div>
 
             {/* 動画表示トグル */}
-            <div className="setting-row" style={{ marginTop: "8px" }}>
+            <div className="setting-row" style={{ marginTop: "6px" }}>
               <button
                 onClick={toggleVidVisible}
                 className="btn-action"
@@ -896,7 +995,7 @@ export default function App() {
             </div>
 
             {/* 動画再生速度スライダー */}
-            <div className="setting-row" style={{ marginTop: "12px" }}>
+            <div className="setting-row" style={{ marginTop: "10px" }}>
               <div className="setting-label-row">
                 <span>動画再生速度</span>
                 <span>{vidSpeed.toFixed(2)}x</span>
@@ -912,10 +1011,10 @@ export default function App() {
             </div>
 
             {/* Info Box */}
-            <div className="info-alert" style={{ marginTop: "16px" }}>
+            <div className="info-alert" style={{ marginTop: "12px" }}>
               <HelpCircle size={12} style={{ flexShrink: 0, marginTop: "1px" }} />
               <span>
-                登録した口パク動画（MP4/WebM）はブラウザの内部ストレージ（IndexedDB）に安全に保存されます。読み上げ開始と同時に滑らかに動画がループ再生され、読み終わるとピタッと自動停止します。
+                登録した口パク動画（MP4/WebM）はブラウザの内部ストレージ（IndexedDB）に安全に保存されます。「全幅フィット」を選ぶと、クリップボードリーダーの横幅いっぱいにロボットが大きく表示されます！
               </span>
             </div>
           </div>
@@ -987,19 +1086,20 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* Font Size Selector */}
+                {/* Font Size Selector（拡大・反映強化） */}
                 <div className="setting-row">
-                  <label className="field-label">文字サイズ</label>
+                  <label className="field-label">文字サイズ（パネル全体の文字拡大）</label>
                   <select
                     value={fontSize}
                     onChange={(e) => setFontSize(parseInt(e.target.value))}
                     className="select-field"
                   >
-                    <option value="9">9px (小)</option>
-                    <option value="10">10px</option>
+                    <option value="10">10px (小)</option>
                     <option value="11">11px (標準)</option>
-                    <option value="12">12px</option>
-                    <option value="13">13px (大)</option>
+                    <option value="13">13px (やや大)</option>
+                    <option value="15">15px (大)</option>
+                    <option value="17">17px (特大)</option>
+                    <option value="19">19px (極大)</option>
                   </select>
                 </div>
               </div>
