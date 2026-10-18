@@ -136,7 +136,7 @@ export default function App() {
   const speechQueue = useRef<string[]>([]);
   const currentChunkText = useRef<string>("");
   const currentChunkCharIndex = useRef<number>(0);
-  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "480"));
+  const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "0")); // 0: 全表示（比率自動・上下ノーカット全幅）
   const [vidFitMode, setVidFitMode] = useState<"auto" | "cover" | "contain">(() => (localStorage.getItem("solid-tts-vid-fit") as "auto" | "cover" | "contain") || "auto"); // デフォルト上下ノーカット全幅
   const [isVidCollapsed, setIsVidCollapsed] = useState(() => localStorage.getItem("solid-tts-vid-collapsed") === "1"); // 動画折りたたみ状態
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
@@ -665,7 +665,8 @@ export default function App() {
           <div
             className={`avatar-video-wrapper ${isVidCollapsed ? "collapsed" : ""}`}
             style={{
-              maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "min(480px, calc(100vh - 360px))" : `${vidHeight}px`)
+              maxHeight: isVidCollapsed ? "0px" : (vidHeight > 0 ? `${vidHeight}px` : "none"),
+              height: isVidCollapsed ? "0px" : (vidHeight > 0 ? `${vidHeight}px` : (vidFitMode === "auto" ? "auto" : "100%"))
             }}
           >
             <video
@@ -678,11 +679,13 @@ export default function App() {
               className={`avatar-video-element fit-${vidFitMode}`}
               style={{
                 cursor: "pointer",
-                maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "min(480px, calc(100vh - 360px))" : `${vidHeight}px`)
+                maxHeight: isVidCollapsed ? "0px" : (vidHeight > 0 ? `${vidHeight}px` : "none"),
+                height: isVidCollapsed ? "0px" : (vidHeight > 0 ? `${vidHeight}px` : "auto"),
+                objectPosition: "top center"
               }}
               title="クリックで一時停止 / 再生"
             />
-            {/* 右上クイックサイズ＆フィット切り替えボタン */}
+            {/* 右上クイックサイズ＆フィット＆高さ調整ボタン（カオルさまご要望機能） */}
             {!isVidCollapsed && (
               <div className="avatar-size-bar">
                 <button
@@ -691,7 +694,18 @@ export default function App() {
                   title="表示形式切替（上下ノーカット全幅 ↔ 枠内全幅 ↔ 全体収容）"
                   style={{ marginRight: "4px" }}
                 >
-                  {vidFitMode === "auto" ? "📐 上下ノーカット" : vidFitMode === "cover" ? "✂️ 枠内全幅" : "🔲 全体収容"}
+                  {vidFitMode === "auto" ? "📐 上下ノーカット全幅" : vidFitMode === "cover" ? "✂️ 枠内全幅" : "🔲 全体収容"}
+                </button>
+                <button
+                  onClick={() => {
+                    const nextH = vidHeight === 0 ? 380 : vidHeight === 380 ? 520 : 0;
+                    changeVidHeight(nextH);
+                  }}
+                  className="btn-size-toggle"
+                  title="動画の高さ切り替え（全高自動ノーカット ↔ 380px ↔ 520px）"
+                  style={{ marginRight: "4px" }}
+                >
+                  {vidHeight === 0 ? "↕️ 高さ: 全高(自動)" : `↕️ 高さ: ${vidHeight}px`}
                 </button>
                 <button
                   onClick={toggleVidCollapse}
@@ -813,209 +827,181 @@ export default function App() {
               />
             </div>
 
-            {/* Textarea collapse toggle */}
-            <button
-              onClick={() => setIsTextareaExpanded(!isTextareaExpanded)}
-              className="btn-action"
-              style={{
-                width: "100%",
-                marginTop: "2px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-                borderStyle: "dashed",
-                borderColor: "var(--border-btn-secondary)"
-              }}
-            >
-              <Edit3 size={11} />
-              {isTextareaExpanded ? "✏️ テキスト入力欄を閉じる" : "✏️ テキスト入力欄を展開"}
-              {isTextareaExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
-
-            {/* Input area */}
-            {isTextareaExpanded && (
-              <div className="text-area-container">
-                <label className="field-label">読み上げテキスト</label>
-                <textarea
-                  value={textToRead}
-                  onChange={(e) => setTextToRead(e.target.value)}
-                  placeholder="ここにテキストを入力するか、貼り付けて再生してください..."
-                  className="textarea-field"
-                />
-              </div>
-            )}
-
-            {/* Collapsible settings toggle button */}
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="btn-action"
-              style={{
-                width: "100%",
-                marginTop: "2px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-                borderStyle: "dashed",
-                borderColor: "var(--border-btn-secondary)"
-              }}
-            >
-              <Settings size={11} />
-              {isCollapsed ? "⚙️ 詳細設定を展開 (ボイス・話速)" : "⚙️ 詳細設定を閉じる"}
-              {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-            </button>
-
-            {/* Collapsible Content Section */}
-            {!isCollapsed && (
-              <div
-                className="space-y-4"
-                style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "6px" }}
-              >
-                {/* Settings controls */}
-                <div className="settings-grid" style={{ paddingTop: "10px" }}>
-                  {/* 一郎（男性声） / 遥か（女性声） ワンタッチボイス選択（カオルさまご要望機能） */}
-                  <div className="setting-row">
-                    <div className="setting-label-row">
-                      <span>ボイス選択 (話者)</span>
-                      <span style={{ fontSize: "0.85em", opacity: 0.85 }}>
-                        {isIchiroSelected ? "👨 一郎（男性声）" : isHarukaSelected ? "👩 遥か（女性声）" : (voices[selectedVoiceIdx]?.name || "日本語")}
-                      </span>
-                    </div>
-                    <div className="voice-selector-grid">
-                      <button
-                        type="button"
-                        onClick={() => selectPredefinedVoice("ichiro")}
-                        className={`voice-card-btn ${isIchiroSelected ? "active" : ""}`}
-                        title="一郎（男性ボイス）に切り替え"
-                      >
-                        <span className="voice-card-avatar">👨</span>
-                        <div className="voice-card-text">
-                          <span className="voice-card-title">一郎</span>
-                          <span className="voice-card-sub">男性ボイス</span>
-                        </div>
-                        {isIchiroSelected && <span className="voice-card-badge">選択中</span>}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => selectPredefinedVoice("haruka")}
-                        className={`voice-card-btn ${isHarukaSelected ? "active" : ""}`}
-                        title="遥か（女性ボイス）に切り替え"
-                      >
-                        <span className="voice-card-avatar">👩</span>
-                        <div className="voice-card-text">
-                          <span className="voice-card-title">遥か</span>
-                          <span className="voice-card-sub">女性ボイス</span>
-                        </div>
-                        {isHarukaSelected && <span className="voice-card-badge">選択中</span>}
-                      </button>
-                    </div>
-
-                    {/* 詳細全ボイスリスト（環境別全音声ドロップダウン） */}
-                    <div style={{ marginTop: "6px" }}>
-                      <select
-                        value={selectedVoiceIdx}
-                        onChange={handleVoiceChange}
-                        className="select-field"
-                        title="インストール済み全音声リストから直接指定"
-                      >
-                        {voices.map((v, i) => (
-                          <option key={i} value={i}>
-                            {v.name} ({v.lang})
-                          </option>
-                        ))}
-                        {!voices.length && <option value="0">音声読み込み中...</option>}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Speed slider */}
-                  <div className="setting-row">
-                    <div className="setting-label-row">
-                      <span>話速</span>
-                      <span>{speed.toFixed(1)}x</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="3.0"
-                      step="0.1"
-                      value={speed}
-                      onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                    />
-                  </div>
-
-                  {/* Pitch slider */}
-                  <div className="setting-row">
-                    <div className="setting-label-row">
-                      <span>ピッチ (高低)</span>
-                      <span>{pitch.toFixed(1)}x</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="2.0"
-                      step="0.1"
-                      value={pitch}
-                      onChange={(e) => setPitch(parseFloat(e.target.value))}
-                    />
-                  </div>
-
-                  {/* Volume slider */}
-                  <div className="setting-row">
-                    <div className="setting-label-row">
-                      <span>音量</span>
-                      <span>{volume}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="5"
-                      value={volume}
-                      onChange={(e) => setVolume(parseInt(e.target.value))}
-                    />
-                  </div>
-
-                  {/* Preset Label Rename */}
-                  <div className="setting-row">
-                    <label className="field-label">選択中のプリセット名</label>
-                    <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-                      <input
-                        type="text"
-                        className="select-field"
-                        style={{ flex: 1, padding: "6px 10px", boxSizing: "border-box" }}
-                        value={tempPresetLabel}
-                        onChange={(e) => setTempPresetLabel(e.target.value)}
-                        placeholder="新しいプリセット名..."
-                      />
-                      <button
-                        onClick={handleSavePresetName}
-                        className="btn-action"
-                        style={{
-                          flexShrink: 0,
-                          padding: "6px 12px",
-                          borderStyle: "solid",
-                          borderColor: "var(--bg-btn-primary)",
-                          color: "var(--bg-btn-primary)"
-                        }}
-                      >
-                        決定
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Info Box */}
-                <div className="info-alert">
-                  <HelpCircle size={12} style={{ flexShrink: 0, marginTop: "1px" }} />
-                  <span>
-                    「クリップボードを読み上げる」はコピーした文章を自動取得して再生します。入力ボックスへ貼り付け・直接編集して通常の「再生」を行うことも可能です。
+            {/* ── 音声設定（常時全表示・カオルさまご要望機能） ── */}
+            <div className="settings-grid" style={{ paddingTop: "6px" }}>
+              {/* 一郎（男性声） / 遥か（女性声） ワンタッチボイス選択（カオルさまご要望機能） */}
+              <div className="setting-row">
+                <div className="setting-label-row">
+                  <span>ボイス選択 (話者)</span>
+                  <span style={{ fontSize: "0.85em", opacity: 0.85 }}>
+                    {isIchiroSelected ? "👨 一郎（男性声）" : isHarukaSelected ? "👩 遥か（女性声）" : (voices[selectedVoiceIdx]?.name || "日本語")}
                   </span>
                 </div>
+                <div className="voice-selector-grid">
+                  <button
+                    type="button"
+                    onClick={() => selectPredefinedVoice("ichiro")}
+                    className={`voice-card-btn ${isIchiroSelected ? "active" : ""}`}
+                    title="一郎（男性ボイス）に切り替え"
+                  >
+                    <span className="voice-card-avatar">👨</span>
+                    <div className="voice-card-text">
+                      <span className="voice-card-title">一郎</span>
+                      <span className="voice-card-sub">男性ボイス</span>
+                    </div>
+                    {isIchiroSelected && <span className="voice-card-badge">選択中</span>}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => selectPredefinedVoice("haruka")}
+                    className={`voice-card-btn ${isHarukaSelected ? "active" : ""}`}
+                    title="遥か（女性ボイス）に切り替え"
+                  >
+                    <span className="voice-card-avatar">👩</span>
+                    <div className="voice-card-text">
+                      <span className="voice-card-title">遥か</span>
+                      <span className="voice-card-sub">女性ボイス</span>
+                    </div>
+                    {isHarukaSelected && <span className="voice-card-badge">選択中</span>}
+                  </button>
+                </div>
+
+                {/* 詳細全ボイスリスト（環境別全音声ドロップダウン） */}
+                <div style={{ marginTop: "6px" }}>
+                  <select
+                    value={selectedVoiceIdx}
+                    onChange={handleVoiceChange}
+                    className="select-field"
+                    title="インストール済み全音声リストから直接指定"
+                  >
+                    {voices.map((v, i) => (
+                      <option key={i} value={i}>
+                        {v.name} ({v.lang})
+                      </option>
+                    ))}
+                    {!voices.length && <option value="0">音声読み込み中...</option>}
+                  </select>
+                </div>
               </div>
-            )}
+
+              {/* Speed slider */}
+              <div className="setting-row">
+                <div className="setting-label-row">
+                  <span>話速</span>
+                  <span>{speed.toFixed(1)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="3.0"
+                  step="0.1"
+                  value={speed}
+                  onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                />
+              </div>
+
+              {/* Pitch slider */}
+              <div className="setting-row">
+                <div className="setting-label-row">
+                  <span>ピッチ (高低)</span>
+                  <span>{pitch.toFixed(1)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.1"
+                  value={pitch}
+                  onChange={(e) => setPitch(parseFloat(e.target.value))}
+                />
+              </div>
+
+              {/* Volume slider */}
+              <div className="setting-row">
+                <div className="setting-label-row">
+                  <span>音量</span>
+                  <span>{volume}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={volume}
+                  onChange={(e) => setVolume(parseInt(e.target.value))}
+                />
+              </div>
+
+              {/* Preset Label Rename */}
+              <div className="setting-row">
+                <label className="field-label">選択中のプリセット名</label>
+                <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                  <input
+                    type="text"
+                    className="select-field"
+                    style={{ flex: 1, padding: "6px 10px", boxSizing: "border-box" }}
+                    value={tempPresetLabel}
+                    onChange={(e) => setTempPresetLabel(e.target.value)}
+                    placeholder="新しいプリセット名..."
+                  />
+                  <button
+                    onClick={handleSavePresetName}
+                    className="btn-action"
+                    style={{
+                      flexShrink: 0,
+                      padding: "6px 12px",
+                      borderStyle: "solid",
+                      borderColor: "var(--bg-btn-primary)",
+                      color: "var(--bg-btn-primary)"
+                    }}
+                  >
+                    決定
+                  </button>
+                </div>
+              </div>
+
+              {/* Textarea collapse toggle */}
+              <button
+                onClick={() => setIsTextareaExpanded(!isTextareaExpanded)}
+                className="btn-action"
+                style={{
+                  width: "100%",
+                  marginTop: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  borderStyle: "dashed",
+                  borderColor: "var(--border-btn-secondary)"
+                }}
+              >
+                <Edit3 size={11} />
+                {isTextareaExpanded ? "✏️ テキスト入力欄を閉じる" : "✏️ テキスト入力欄を展開"}
+                {isTextareaExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+
+              {/* Input area */}
+              {isTextareaExpanded && (
+                <div className="text-area-container">
+                  <label className="field-label">読み上げテキスト</label>
+                  <textarea
+                    value={textToRead}
+                    onChange={(e) => setTextToRead(e.target.value)}
+                    placeholder="ここにテキストを入力するか、貼り付けて再生してください..."
+                    className="textarea-field"
+                  />
+                </div>
+              )}
+
+              {/* Info Box */}
+              <div className="info-alert">
+                <HelpCircle size={12} style={{ flexShrink: 0, marginTop: "1px" }} />
+                <span>
+                  「クリップボードを読み上げる」はコピーした文章を自動取得して再生します。入力ボックスへ貼り付け・直接編集して通常の「再生」を行うことも可能です。
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1084,45 +1070,55 @@ export default function App() {
               </div>
             </div>
 
-            {/* 動画表示サイズ設定（カオルさまご要望機能） */}
+            {/* 動画表示サイズ設定（任意で自由に調整可能・カオルさまご要望機能） */}
             <div className="setting-row" style={{ marginTop: "10px" }}>
               <div className="setting-label-row">
-                <span>動画の表示サイズ上限（高さ指定モード時）</span>
-                <span>{vidHeight}px</span>
+                <span>動画の表示高さ（任意調整）</span>
+                <span style={{ fontWeight: "bold", color: "var(--bg-btn-primary)" }}>
+                  {vidHeight === 0 ? "全高（自動・ノーカット全幅）" : `${vidHeight}px`}
+                </span>
               </div>
-              <div className="size-presets-grid" style={{ marginBottom: "6px" }}>
+              <div className="size-presets-grid" style={{ marginBottom: "6px", gridTemplateColumns: "repeat(5, 1fr)" }}>
                 <button
-                  onClick={() => changeVidHeight(200)}
-                  className={`slot-btn ${vidHeight === 200 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(0)}
+                  className={`slot-btn ${vidHeight === 0 ? "active" : ""}`}
+                  title="比率自動・上下ノーカット全幅"
                 >
-                  小 (200)
+                  全高
                 </button>
                 <button
-                  onClick={() => changeVidHeight(340)}
-                  className={`slot-btn ${vidHeight === 340 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(320)}
+                  className={`slot-btn ${vidHeight === 320 ? "active" : ""}`}
                 >
-                  中 (340)
+                  320
                 </button>
                 <button
-                  onClick={() => changeVidHeight(480)}
-                  className={`slot-btn ${vidHeight === 480 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(450)}
+                  className={`slot-btn ${vidHeight === 450 ? "active" : ""}`}
                 >
-                  大 (480)
+                  450
                 </button>
                 <button
-                  onClick={() => changeVidHeight(620)}
-                  className={`slot-btn ${vidHeight === 620 ? "active" : ""}`}
+                  onClick={() => changeVidHeight(600)}
+                  className={`slot-btn ${vidHeight === 600 ? "active" : ""}`}
                 >
-                  特大 (620)
+                  600
+                </button>
+                <button
+                  onClick={() => changeVidHeight(750)}
+                  className={`slot-btn ${vidHeight === 750 ? "active" : ""}`}
+                >
+                  750
                 </button>
               </div>
               <input
                 type="range"
-                min="160"
-                max="720"
+                min="0"
+                max="900"
                 step="10"
                 value={vidHeight}
                 onChange={(e) => changeVidHeight(parseInt(e.target.value))}
+                title="0: 全高自動ノーカット全幅 / 100〜900px: 任意指定"
               />
             </div>
 
