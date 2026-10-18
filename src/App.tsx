@@ -569,6 +569,17 @@ export default function App() {
     }
   };
 
+  // 動画クリックで一時停止 / 再開（カオルさまご要望機能）
+  const handleVideoClick = () => {
+    if (status === "再生中" || status === "一時停止中") {
+      togglePause();
+    } else {
+      if (textToRead && textToRead.trim()) {
+        startSpeaking(textToRead);
+      }
+    }
+  };
+
   // Clipboard Reading function
   const readClipboard = async () => {
     try {
@@ -654,10 +665,13 @@ export default function App() {
             loop
             muted
             playsInline
+            onClick={handleVideoClick}
             className={`avatar-video-element ${vidMode}`}
             style={{
-              maxHeight: vidMode === "expanded" ? "none" : `${vidHeight}px`
+              maxHeight: vidMode === "expanded" ? "none" : `${vidHeight}px`,
+              cursor: "pointer"
             }}
+            title="クリックで一時停止 / 再生"
           />
           {/* 右上ノーマル ↔ 拡大 切り替えボタン */}
           <div className="avatar-size-bar">
@@ -677,19 +691,19 @@ export default function App() {
       <div className="panel-content">
         {activeTab === "voice" && (
           <div className="tab-pane">
-            {/* Preset select strip */}
+            {/* Preset select strip (一郎・遥かの左右反転) */}
             <div className="preset-strip">
-              <button
-                onClick={() => switchPreset("A")}
-                className={`preset-btn ${currentPreset === "A" ? "active" : ""}`}
-              >
-                {presetALabel}
-              </button>
               <button
                 onClick={() => switchPreset("B")}
                 className={`preset-btn ${currentPreset === "B" ? "active" : ""}`}
               >
                 {presetBLabel}
+              </button>
+              <button
+                onClick={() => switchPreset("A")}
+                className={`preset-btn ${currentPreset === "A" ? "active" : ""}`}
+              >
+                {presetALabel}
               </button>
             </div>
 
