@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette } from "lucide-react";
+import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff } from "lucide-react";
 
 // Themes configuration
 const THEMES = {
@@ -17,6 +17,53 @@ const FONTS = {
   rounded: { label: "丸ゴシック", css: "'M PLUS Rounded 1c','Hiragino Maru Gothic Pro',sans-serif" }
 };
 
+// IndexedDB for Avatar Videos (3 Slots)
+const TTS_VID_DB_NAME = "solidTtsVideoDB";
+const TTS_VID_STORE = "videos";
+const VID_SLOT_COUNT = 3;
+const vidSlotDbKey = (n: number) => `tts_vid_slot_blob_${n}`;
+
+const openVidDB = (): Promise<IDBDatabase> =>
+  new Promise((resolve, reject) => {
+    const req = indexedDB.open(TTS_VID_DB_NAME, 1);
+    req.onupgradeneeded = (e) => (e.target as any).result.createObjectStore(TTS_VID_STORE);
+    req.onsuccess = (e) => resolve((e.target as any).result);
+    req.onerror = (e) => reject((e.target as any).error);
+  });
+
+const saveVidToDB = (file: File | Blob, slotN: number): Promise<void> =>
+  openVidDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(TTS_VID_STORE, "readwrite");
+        tx.objectStore(TTS_VID_STORE).put(file, vidSlotDbKey(slotN));
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      })
+  );
+
+const loadVidFromDB = (slotN: number): Promise<Blob | null> =>
+  openVidDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(TTS_VID_STORE, "readonly");
+        const req = tx.objectStore(TTS_VID_STORE).get(vidSlotDbKey(slotN));
+        req.onsuccess = (e) => resolve((e.target as any).result || null);
+        req.onerror = () => reject(req.error);
+      })
+  );
+
+const deleteVidFromDB = (slotN: number): Promise<void> =>
+  openVidDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(TTS_VID_STORE, "readwrite");
+        tx.objectStore(TTS_VID_STORE).delete(vidSlotDbKey(slotN));
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      })
+  );
+
 export default function App() {
   // Load settings from localStorage
   const [theme, setTheme] = useState(() => localStorage.getItem("aist-tts-theme") || "dark");
@@ -31,7 +78,7 @@ export default function App() {
   const [textToRead, setTextToRead] = useState("");
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceIdx, setSelectedVoiceIdx] = useState<number>(0);
-  
+
   // Presets state
   const [currentPreset, setCurrentPreset] = useState(() => localStorage.getItem("aist-tts-preset-active") || "A");
   const [presetALabel, setPresetALabel] = useState(() => localStorage.getItem("aist-tts-preset-a-label") || "ボイス A");
@@ -65,6 +112,116 @@ export default function App() {
 
   const ttsGeneration = useRef(0);
   const speechQueue = useRef<string[]>([]);
+
+  // =============================================
+  // アバター動画（口パク動画）State & 制御
+  // =============================================
+  const [vidSlot, setVidSlot] = useState(() => {
+    const v = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
+    return isNaN(v) || v < 0 || v >= VID_SLOT_COUNT ? 0 : v;
+  });
+  const [vidSpeed, setVidSpeed] = useState(() => parseFloat(localStorage.getItem("solid-tts-vid-speed") || "1.25"));
+  const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
+  const [vidVisible, setVidVisible] = useState(() => localStorage.getItem("solid-tts-vid-visible") !== "0"); // デフォルトON
+  const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
+  const [videoMimeType, setVideoMimeType] = useState<string>("video/mp4");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 指定スロットの動画をIndexedDBからロード
+  const loadSlotVideo = async (slotIdx: number) => {
+    try {
+      const blob = await loadVidFromDB(slotIdx);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        setVideoBlobUrl(url);
+        setVideoMimeType(blob.type || "video/mp4");
+      } else {
+        setVideoBlobUrl(null);
+      }
+    } catch (e) {
+      setVideoBlobUrl(null);
+    }
+  };
+
+  useEffect(() => {
+    loadSlotVideo(vidSlot);
+  }, [vidSlot]);
+
+  // 動画速度の反映
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = vidSpeed;
+    }
+    localStorage.setItem("solid-tts-vid-speed", String(vidSpeed));
+  }, [vidSpeed, videoBlobUrl]);
+
+  // アバター動画の再生・一時停止処理
+  const playAvatarVideo = () => {
+    if (!vidSyncEnabled) return;
+    const vid = videoRef.current;
+    if (vid) {
+      vid.muted = true;
+      vid.loop = true;
+      vid.playbackRate = vidSpeed;
+      const p = vid.play();
+      if (p && p.catch) p.catch(() => {});
+    }
+  };
+
+  const pauseAvatarVideo = () => {
+    const vid = videoRef.current;
+    if (vid && !vid.paused) {
+      vid.pause();
+    }
+  };
+
+  const switchVidSlot = (idx: number) => {
+    pauseAvatarVideo();
+    setVidSlot(idx);
+    localStorage.setItem("solid-tts-vid-slot", String(idx));
+  };
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 200 * 1024 * 1024) {
+      alert("200MBを超えるファイルは非対応です。");
+      return;
+    }
+    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+    try {
+      await saveVidToDB(file, vidSlot);
+      await loadSlotVideo(vidSlot);
+      alert(`スロット${vidSlot + 1}に動画を保存しました（${sizeMB}MB）`);
+    } catch (err: any) {
+      alert("動画の保存に失敗しました: " + err.message);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDeleteVideo = async () => {
+    if (!confirm(`スロット${vidSlot + 1}の動画を削除しますか？`)) return;
+    pauseAvatarVideo();
+    try {
+      await deleteVidFromDB(vidSlot);
+      setVideoBlobUrl(null);
+    } catch (e) {}
+  };
+
+  const toggleVidSync = () => {
+    const next = !vidSyncEnabled;
+    setVidSyncEnabled(next);
+    localStorage.setItem("solid-tts-vid-sync", next ? "1" : "0");
+    if (!next) pauseAvatarVideo();
+    else if (status === "再生中" && !isPaused) playAvatarVideo();
+  };
+
+  const toggleVidVisible = () => {
+    const next = !vidVisible;
+    setVidVisible(next);
+    localStorage.setItem("solid-tts-vid-visible", next ? "1" : "0");
+  };
 
   // Apply Theme & Fonts to HTML elements
   useEffect(() => {
@@ -128,21 +285,21 @@ export default function App() {
   useEffect(() => {
     const loadVoicesList = () => {
       const all = window.speechSynthesis.getVoices();
-      let jaVoices = all.filter(v => /ja|JP/i.test(v.lang));
+      let jaVoices = all.filter((v) => /ja|JP/i.test(v.lang));
       if (!jaVoices.length) jaVoices = all;
       setVoices(jaVoices);
 
       const active = localStorage.getItem("aist-tts-preset-active") || "A";
       const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
       const savedName = localStorage.getItem(prefix + "voice") || "";
-      let idx = jaVoices.findIndex(v => v.name === savedName);
-      
+      let idx = jaVoices.findIndex((v) => v.name === savedName);
+
       if (idx < 0 && !savedName) {
         // Fallback defaults for Ichiro / Haruka
         if (active === "A") {
-          idx = jaVoices.findIndex(v => /haruka/i.test(v.name));
+          idx = jaVoices.findIndex((v) => /haruka/i.test(v.name));
         } else {
-          idx = jaVoices.findIndex(v => /ichiro/i.test(v.name));
+          idx = jaVoices.findIndex((v) => /ichiro/i.test(v.name));
         }
       }
       if (idx < 0) idx = 0;
@@ -157,11 +314,11 @@ export default function App() {
 
     return () => {
       window.speechSynthesis.cancel();
+      pauseAvatarVideo();
     };
   }, []);
 
   const switchPreset = (presetName: string) => {
-    // Save current parameters to the active preset before switching
     const prefixOld = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
     localStorage.setItem(prefixOld + "speed", String(speed));
     localStorage.setItem(prefixOld + "pitch", String(pitch));
@@ -170,11 +327,9 @@ export default function App() {
       localStorage.setItem(prefixOld + "voice", voices[selectedVoiceIdx].name);
     }
 
-    // Switch active state
     setCurrentPreset(presetName);
     localStorage.setItem("aist-tts-preset-active", presetName);
 
-    // Load new preset parameters
     const prefixNew = `aist-tts-preset-${presetName.toLowerCase()}-`;
     const newSpeed = parseFloat(localStorage.getItem(prefixNew + "speed") || "1.2");
     const newPitch = parseFloat(localStorage.getItem(prefixNew + "pitch") || "1.0");
@@ -186,17 +341,16 @@ export default function App() {
     setVolume(newVolume);
 
     if (newVoiceName) {
-      const idx = voices.findIndex(v => v.name === newVoiceName);
+      const idx = voices.findIndex((v) => v.name === newVoiceName);
       if (idx >= 0) {
         setSelectedVoiceIdx(idx);
       }
     } else {
-      // Defaults fallback
       let idx = -1;
       if (presetName === "A") {
-        idx = voices.findIndex(v => /haruka/i.test(v.name));
+        idx = voices.findIndex((v) => /haruka/i.test(v.name));
       } else {
-        idx = voices.findIndex(v => /ichiro/i.test(v.name));
+        idx = voices.findIndex((v) => /ichiro/i.test(v.name));
       }
       if (idx >= 0) setSelectedVoiceIdx(idx);
     }
@@ -220,7 +374,7 @@ export default function App() {
     const sentences = text.split(/(?<=[。！？\n])/);
     const chunks: string[] = [];
     let cur = "";
-    sentences.forEach(s => {
+    sentences.forEach((s) => {
       if ((cur + s).length > maxLen && cur) {
         chunks.push(cur);
         cur = s;
@@ -233,19 +387,46 @@ export default function App() {
       }
     });
     if (cur.trim()) chunks.push(cur);
-    return chunks.filter(c => c.trim().length);
+    return chunks.filter((c) => c.trim().length);
   };
+
+  // Keep-Alive & Safety Watcher for Speech and Video
+  useEffect(() => {
+    const watcher = setInterval(() => {
+      if (status === "再生中" && !isPaused) {
+        if (!window.speechSynthesis.speaking && !speechQueue.current.length) {
+          setStatus("待機中");
+          pauseAvatarVideo();
+        } else if (window.speechSynthesis.speaking) {
+          // Chrome 15s pause bug workaround
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        }
+      }
+    }, 8000);
+    return () => clearInterval(watcher);
+  }, [status, isPaused]);
+
+  // 高頻度監視タイマー（音声終了時の即時動画停止用）
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (status === "待機中" || isPaused) {
+        pauseAvatarVideo();
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, [status, isPaused]);
 
   const playNextChunk = (gen: number) => {
     if (gen !== ttsGeneration.current) return;
     if (!speechQueue.current.length) {
       setStatus("待機中");
+      pauseAvatarVideo(); // 読み上げキュー完了で動画自動停止！
       return;
     }
     const chunk = speechQueue.current.shift()!;
     const utter = new SpeechSynthesisUtterance(chunk);
-    
-    // Apply configs
+
     const selectedVoice = voices[selectedVoiceIdx];
     if (selectedVoice) {
       utter.voice = selectedVoice;
@@ -256,6 +437,12 @@ export default function App() {
     utter.rate = speed;
     utter.pitch = pitch;
     utter.volume = volume / 100;
+
+    utter.onstart = () => {
+      if (gen === ttsGeneration.current) {
+        playAvatarVideo(); // 発声開始で動画再生！
+      }
+    };
 
     utter.onend = utter.onerror = () => {
       if (gen === ttsGeneration.current) {
@@ -278,8 +465,10 @@ export default function App() {
     setStatus("再生中");
     setIsPaused(false);
 
-    // Firefox/Safari delay safety
-    setTimeout(() => playNextChunk(gen), 150);
+    // 発声開始と同時に動画再生始動！
+    playAvatarVideo();
+
+    setTimeout(() => playNextChunk(gen), 100);
   };
 
   const stopSpeaking = () => {
@@ -288,6 +477,7 @@ export default function App() {
     speechQueue.current = [];
     setStatus("待機中");
     setIsPaused(false);
+    pauseAvatarVideo(); // 全停止で動画停止！
   };
 
   const togglePause = () => {
@@ -296,10 +486,12 @@ export default function App() {
       window.speechSynthesis.resume();
       setIsPaused(false);
       setStatus("再生中");
+      playAvatarVideo(); // 一時停止解除で動画再開！
     } else {
       window.speechSynthesis.pause();
       setIsPaused(true);
       setStatus("一時停止中");
+      pauseAvatarVideo(); // 一時停止で動画停止！
     }
   };
 
@@ -326,9 +518,18 @@ export default function App() {
           <Volume2 size={13} style={{ color: "var(--bg-btn-primary)" }} />
           SOLID TTS CLIPBOARD READER
         </span>
-        <span className="status-badge">
-          {status}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {videoBlobUrl && (
+            <button
+              onClick={toggleVidVisible}
+              className="btn-icon-subtle"
+              title={vidVisible ? "動画を非表示" : "動画を表示"}
+            >
+              {vidVisible ? <Eye size={12} /> : <EyeOff size={12} />}
+            </button>
+          )}
+          <span className="status-badge">{status}</span>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -344,6 +545,17 @@ export default function App() {
           音声コントロール
         </button>
         <button
+          onClick={() => setActiveTab("avatar")}
+          className="tab-button"
+          style={{
+            background: activeTab === "avatar" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
+            color: activeTab === "avatar" ? "var(--text-tab-active)" : "var(--text-tab-inactive)",
+            position: "relative"
+          }}
+        >
+          🎬 アバター動画
+        </button>
+        <button
           onClick={() => setActiveTab("theme")}
           className="tab-button"
           style={{
@@ -355,9 +567,23 @@ export default function App() {
         </button>
       </div>
 
+      {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合に常時上部へ表示） */}
+      {videoBlobUrl && vidVisible && (
+        <div className="avatar-video-wrapper">
+          <video
+            ref={videoRef}
+            src={videoBlobUrl}
+            loop
+            muted
+            playsInline
+            className="avatar-video-element"
+          />
+        </div>
+      )}
+
       {/* Main Panel Content */}
       <div className="panel-content">
-        {activeTab === "voice" ? (
+        {activeTab === "voice" && (
           <div className="tab-pane">
             {/* Preset select strip */}
             <div className="preset-strip">
@@ -399,10 +625,7 @@ export default function App() {
                 <Pause size={11} />
                 {isPaused ? "再開" : "一時停止"}
               </button>
-              <button
-                onClick={stopSpeaking}
-                className="btn-action btn-stop"
-              >
+              <button onClick={stopSpeaking} className="btn-action btn-stop">
                 <Square size={11} />
                 全停止
               </button>
@@ -431,9 +654,7 @@ export default function App() {
             {/* Input area - stretches to fill available height when expanded */}
             {isTextareaExpanded && (
               <div className="text-area-container">
-                <label className="field-label">
-                  読み上げテキスト
-                </label>
+                <label className="field-label">読み上げテキスト</label>
                 <textarea
                   value={textToRead}
                   onChange={(e) => setTextToRead(e.target.value)}
@@ -465,7 +686,10 @@ export default function App() {
 
             {/* Collapsible Content Section */}
             {!isCollapsed && (
-              <div className="space-y-4" style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
+              <div
+                className="space-y-4"
+                style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}
+              >
                 {/* Settings controls */}
                 <div className="settings-grid" style={{ paddingTop: "12px" }}>
                   {/* Voice select */}
@@ -572,9 +796,134 @@ export default function App() {
               </div>
             )}
           </div>
-        ) : (
+        )}
+
+        {/* ── アバター動画タブ ── */}
+        {activeTab === "avatar" && (
           <div className="tab-pane">
-            {/* Collapsible themes toggle button */}
+            {/* スロット選択タブ */}
+            <div className="setting-row">
+              <label className="field-label">動画スロット選択（全3スロット保存）</label>
+              <div className="slot-grid">
+                {[0, 1, 2].map((i) => (
+                  <button
+                    key={i}
+                    onClick={() => switchVidSlot(i)}
+                    className={`slot-btn ${vidSlot === i ? "active" : ""}`}
+                  >
+                    スロット {i + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ファイル選択 & 削除ボタン */}
+            <div className="setting-row" style={{ marginTop: "10px" }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/mp4,video/webm,video/ogg,video/quicktime"
+                onChange={handleVideoUpload}
+                style={{ display: "none" }}
+              />
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn-action"
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    borderStyle: "dashed",
+                    borderColor: "var(--bg-btn-primary)",
+                    color: "var(--text-primary)"
+                  }}
+                >
+                  <Video size={13} />
+                  📂 動画ファイルを選択
+                </button>
+                {videoBlobUrl && (
+                  <button
+                    onClick={handleDeleteVideo}
+                    className="btn-action"
+                    style={{
+                      flexShrink: 0,
+                      padding: "6px 12px",
+                      color: "#f87171",
+                      borderColor: "#f87171"
+                    }}
+                    title="動画を削除"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 口パク動画連動トグル */}
+            <div className="setting-row" style={{ marginTop: "12px" }}>
+              <button
+                onClick={toggleVidSync}
+                className="btn-action"
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  fontWeight: "bold",
+                  background: vidSyncEnabled ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+                  color: vidSyncEnabled ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
+                  borderColor: vidSyncEnabled ? "transparent" : "var(--border-btn-secondary)"
+                }}
+              >
+                {vidSyncEnabled ? "🎬 読み上げ・動画連動：ON" : "⏹ 読み上げ・動画連動：OFF"}
+              </button>
+            </div>
+
+            {/* 動画表示トグル */}
+            <div className="setting-row" style={{ marginTop: "8px" }}>
+              <button
+                onClick={toggleVidVisible}
+                className="btn-action"
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderColor: "var(--border-btn-secondary)"
+                }}
+              >
+                {vidVisible ? "👁️ プレビュー枠：常時表示中" : "🙈 プレビュー枠：非表示中"}
+              </button>
+            </div>
+
+            {/* 動画再生速度スライダー */}
+            <div className="setting-row" style={{ marginTop: "12px" }}>
+              <div className="setting-label-row">
+                <span>動画再生速度</span>
+                <span>{vidSpeed.toFixed(2)}x</span>
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max="2.5"
+                step="0.05"
+                value={vidSpeed}
+                onChange={(e) => setVidSpeed(parseFloat(e.target.value))}
+              />
+            </div>
+
+            {/* Info Box */}
+            <div className="info-alert" style={{ marginTop: "16px" }}>
+              <HelpCircle size={12} style={{ flexShrink: 0, marginTop: "1px" }} />
+              <span>
+                登録した口パク動画（MP4/WebM）はブラウザの内部ストレージ（IndexedDB）に安全に保存されます。読み上げ開始と同時に滑らかに動画がループ再生され、読み終わるとピタッと自動停止します。
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ── テーマ＆フォントタブ ── */}
+        {activeTab === "theme" && (
+          <div className="tab-pane">
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="btn-action"
@@ -594,7 +943,10 @@ export default function App() {
             </button>
 
             {!isCollapsed && (
-              <div className="space-y-4" style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
+              <div
+                className="space-y-4"
+                style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}
+              >
                 {/* Theme select */}
                 <div className="setting-row">
                   <label className="field-label" style={{ marginBottom: "6px" }}>
