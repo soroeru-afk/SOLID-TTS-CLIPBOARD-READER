@@ -142,6 +142,12 @@ export default function App() {
       return next;
     });
   };
+  const [slotNames, setSlotNames] = useState<string[]>(() => [
+    localStorage.getItem("solid-tts-slot-0-name") || "🤖 スロット 1",
+    localStorage.getItem("solid-tts-slot-1-name") || "👩 スロット 2",
+    localStorage.getItem("solid-tts-slot-2-name") || "👨 スロット 3"
+  ]);
+
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
   const [vidVisible, setVidVisible] = useState(() => localStorage.getItem("solid-tts-vid-visible") !== "0"); // デフォルトON
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
@@ -210,16 +216,70 @@ export default function App() {
     }
   };
 
-  const switchVidSlot = (idx: number) => {
+  // スロット切り替え（動画・音声・速度を完全同期）
+  const switchCharacterSlot = (idx: number) => {
     pauseAvatarVideo();
     setVidSlot(idx);
     localStorage.setItem("solid-tts-vid-slot", String(idx));
-    const slotSpd = getSlotVidSpeed(idx);
-    setVidSpeed(slotSpd);
+
+    // 1. 動画再生速度の復元
+    const slotVidSpd = getSlotVidSpeed(idx);
+    setVidSpeed(slotVidSpd);
     if (videoRef.current) {
-      videoRef.current.playbackRate = slotSpd;
+      videoRef.current.playbackRate = slotVidSpd;
+    }
+
+    // 2. 音声設定の復元
+    const savedPreset = localStorage.getItem(`solid-tts-slot-${idx}-preset`) || (idx === 1 ? "A" : "B");
+    setCurrentPreset(savedPreset);
+
+    const savedSpeed = parseFloat(localStorage.getItem(`solid-tts-slot-${idx}-speed`) || (idx === 0 ? "1.25" : idx === 1 ? "1.2" : "1.15"));
+    const savedPitch = parseFloat(localStorage.getItem(`solid-tts-slot-${idx}-pitch`) || (idx === 0 ? "0.95" : idx === 1 ? "1.1" : "1.0"));
+    const savedVolume = parseInt(localStorage.getItem(`solid-tts-slot-${idx}-volume`) || "80");
+    const savedVoice = localStorage.getItem(`solid-tts-slot-${idx}-voice`);
+
+    setSpeed(savedSpeed);
+    setPitch(savedPitch);
+    setVolume(savedVolume);
+
+    if (savedVoice && voices.length > 0) {
+      const vIdx = voices.findIndex((v) => v.name === savedVoice);
+      if (vIdx >= 0) setSelectedVoiceIdx(vIdx);
+    } else if (voices.length > 0) {
+      let vIdx = -1;
+      if (savedPreset === "A") {
+        vIdx = voices.findIndex((v) => /haruka/i.test(v.name));
+      } else {
+        vIdx = voices.findIndex((v) => /ichiro/i.test(v.name));
+      }
+      if (vIdx >= 0) setSelectedVoiceIdx(vIdx);
     }
   };
+
+  const switchVidSlot = switchCharacterSlot;
+
+  // スロット別の音声設定保存
+  useEffect(() => {
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-speed`, String(speed));
+  }, [speed, vidSlot]);
+
+  useEffect(() => {
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-pitch`, String(pitch));
+  }, [pitch, vidSlot]);
+
+  useEffect(() => {
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-volume`, String(volume));
+  }, [volume, vidSlot]);
+
+  useEffect(() => {
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-preset`, currentPreset);
+  }, [currentPreset, vidSlot]);
+
+  useEffect(() => {
+    if (voices[selectedVoiceIdx]) {
+      localStorage.setItem(`solid-tts-slot-${vidSlot}-voice`, voices[selectedVoiceIdx].name);
+    }
+  }, [selectedVoiceIdx, vidSlot, voices]);
 
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -617,38 +677,22 @@ export default function App() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* ── 最上部キャラクタースロット切替タブ（カオルさまご要望機能） ── */}
       <div className="tabs-container">
-        <button
-          onClick={() => setActiveTab("voice")}
-          className="tab-button"
-          style={{
-            background: activeTab === "voice" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
-            color: activeTab === "voice" ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
-          }}
-        >
-          音声コントロール
-        </button>
-        <button
-          onClick={() => setActiveTab("avatar")}
-          className="tab-button"
-          style={{
-            background: activeTab === "avatar" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
-            color: activeTab === "avatar" ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
-          }}
-        >
-          🎬 アバター動画
-        </button>
-        <button
-          onClick={() => setActiveTab("theme")}
-          className="tab-button"
-          style={{
-            background: activeTab === "theme" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
-            color: activeTab === "theme" ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
-          }}
-        >
-          テーマ＆フォント
-        </button>
+        {[0, 1, 2].map((idx) => (
+          <button
+            key={idx}
+            onClick={() => switchCharacterSlot(idx)}
+            className="tab-button"
+            style={{
+              background: vidSlot === idx ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
+              color: vidSlot === idx ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
+            }}
+            title={`スロット${idx + 1}: ${slotNames[idx]}（動画・音声・速度を完全同期）`}
+          >
+            {slotNames[idx] || `スロット ${idx + 1}`}
+          </button>
+        ))}
       </div>
 
       {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合に常時上部へ表示） */}
@@ -689,6 +733,54 @@ export default function App() {
 
       {/* Main Panel Content */}
       <div className="panel-content">
+        {/* パネル内設定サブタブ（音声コントロール / 🎬 アバター動画 / テーマ＆フォント） */}
+        <div
+          className="tabs-container"
+          style={{
+            borderRadius: "6px",
+            overflow: "hidden",
+            marginBottom: "12px",
+            flexShrink: 0,
+            border: "1px solid var(--border-btn-secondary)"
+          }}
+        >
+          <button
+            onClick={() => setActiveTab("voice")}
+            className="tab-button"
+            style={{
+              padding: "8px 4px",
+              fontSize: "calc(var(--font-size-current) * 0.95)",
+              background: activeTab === "voice" ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+              color: activeTab === "voice" ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
+            }}
+          >
+            🎙️ 音声コントロール
+          </button>
+          <button
+            onClick={() => setActiveTab("avatar")}
+            className="tab-button"
+            style={{
+              padding: "8px 4px",
+              fontSize: "calc(var(--font-size-current) * 0.95)",
+              background: activeTab === "avatar" ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+              color: activeTab === "avatar" ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
+            }}
+          >
+            🎬 アバター動画
+          </button>
+          <button
+            onClick={() => setActiveTab("theme")}
+            className="tab-button"
+            style={{
+              padding: "8px 4px",
+              fontSize: "calc(var(--font-size-current) * 0.95)",
+              background: activeTab === "theme" ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+              color: activeTab === "theme" ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
+            }}
+          >
+            🎨 テーマ＆フォント
+          </button>
+        </div>
         {activeTab === "voice" && (
           <div className="tab-pane">
             {/* Preset select strip (一郎・遥かの左右反転) */}
@@ -911,20 +1003,51 @@ export default function App() {
         {/* ── アバター動画タブ ── */}
         {activeTab === "avatar" && (
           <div className="tab-pane">
-            {/* スロット選択タブ */}
+            {/* スロット選択 */}
             <div className="setting-row">
-              <label className="field-label">動画スロット選択（全3スロット保存）</label>
+              <div className="setting-label-row">
+                <span>登録対象キャラクター・スロット</span>
+                <span style={{ opacity: 0.85, fontWeight: "bold" }}>
+                  {slotNames[vidSlot]}
+                </span>
+              </div>
               <div className="slot-grid">
                 {[0, 1, 2].map((i) => (
                   <button
                     key={i}
-                    onClick={() => switchVidSlot(i)}
+                    onClick={() => switchCharacterSlot(i)}
                     className={`slot-btn ${vidSlot === i ? "active" : ""}`}
                   >
-                    スロット {i + 1}
+                    {slotNames[i]}
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* スロット表示名変更 */}
+            <div className="setting-row" style={{ marginTop: "6px" }}>
+              <label className="field-label">スロット表示名 (キャラクター名)</label>
+              <input
+                type="text"
+                value={slotNames[vidSlot] || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSlotNames((prev) => {
+                    const next = [...prev];
+                    next[vidSlot] = val;
+                    localStorage.setItem(`solid-tts-slot-${vidSlot}-name`, val);
+                    return next;
+                  });
+                }}
+                placeholder="キャラクター名を入力 (例: 🤖 ロボット)"
+                className="input-field"
+                style={{
+                  width: "100%",
+                  padding: "7px 10px",
+                  fontSize: "var(--font-size-current)",
+                  boxSizing: "border-box"
+                }}
+              />
             </div>
 
             {/* ファイル選択 & 削除ボタン */}
