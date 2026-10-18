@@ -196,7 +196,7 @@ export default function App() {
       // PWAウィンドウの自動リサイズ追従（カオルさまご要望機能）
       try {
         if (window.resizeTo && window.outerWidth) {
-          const targetH = next ? 410 : 790;
+          const targetH = next ? 340 : 840;
           window.resizeTo(window.outerWidth, targetH);
         }
       } catch (e) {}
@@ -636,40 +636,6 @@ export default function App() {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="tabs-container">
-        <button
-          onClick={() => setActiveTab("voice")}
-          className="tab-button"
-          style={{
-            background: activeTab === "voice" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
-            color: activeTab === "voice" ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
-          }}
-        >
-          音声コントロール
-        </button>
-        <button
-          onClick={() => setActiveTab("avatar")}
-          className="tab-button"
-          style={{
-            background: activeTab === "avatar" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
-            color: activeTab === "avatar" ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
-          }}
-        >
-          🎬 アバター動画
-        </button>
-        <button
-          onClick={() => setActiveTab("theme")}
-          className="tab-button"
-          style={{
-            background: activeTab === "theme" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
-            color: activeTab === "theme" ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
-          }}
-        >
-          テーマ＆フォント
-        </button>
-      </div>
-
       {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合に常時上部へ表示） */}
       {videoBlobUrl && vidVisible && (
         <>
@@ -707,7 +673,7 @@ export default function App() {
                 <button
                   onClick={toggleVidCollapse}
                   className="btn-size-toggle"
-                  title="動画を折りたたむ"
+                  title="動画を閉じる"
                 >
                   <ChevronUp size={11} /> 閉じる
                 </button>
@@ -715,19 +681,21 @@ export default function App() {
             )}
           </div>
 
-          {/* 動画の一番下の折りたたみバー（カオルさまご要望機能） */}
-          <div
-            onClick={toggleVidCollapse}
-            className="avatar-collapse-bar"
-            title={isVidCollapsed ? "動画を展開" : "動画を折りたたむ"}
-          >
-            {isVidCollapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-            <span>{isVidCollapsed ? "🎬 アバター動画を展開する" : "▲ アバター動画を折りたたむ"}</span>
-          </div>
+          {/* 動画が折りたたまれている時の展開バー（カオルさまご要望機能） */}
+          {isVidCollapsed && (
+            <div
+              onClick={toggleVidCollapse}
+              className="avatar-collapse-bar"
+              title="動画を展開する"
+            >
+              <ChevronDown size={13} />
+              <span>🎬 アバター動画を展開する</span>
+            </div>
+          )}
         </>
       )}
 
-      {/* ── 常時表示共通プレイヤーストリップ (全タブ共通・カオルさまご要望機能) ── */}
+      {/* ── 常時表示共通プレイヤーストリップ (再生、一時停止、全停止) ── */}
       <div className="global-player-strip">
         <button onClick={readClipboard} className="global-player-clip-btn" title="クリップボードの文章を即時読み上げ">
           <Clipboard size={14} />
@@ -761,6 +729,40 @@ export default function App() {
             全停止
           </button>
         </div>
+      </div>
+
+      {/* ── タブナビゲーション（プレイヤーストリップの直下・カオルさまご要望機能） ── */}
+      <div className="tabs-container">
+        <button
+          onClick={() => setActiveTab("voice")}
+          className="tab-button"
+          style={{
+            background: activeTab === "voice" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
+            color: activeTab === "voice" ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
+          }}
+        >
+          音声コントロール
+        </button>
+        <button
+          onClick={() => setActiveTab("avatar")}
+          className="tab-button"
+          style={{
+            background: activeTab === "avatar" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
+            color: activeTab === "avatar" ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
+          }}
+        >
+          🎬 アバター動画
+        </button>
+        <button
+          onClick={() => setActiveTab("theme")}
+          className="tab-button"
+          style={{
+            background: activeTab === "theme" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
+            color: activeTab === "theme" ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
+          }}
+        >
+          テーマ＆フォント
+        </button>
       </div>
 
       {/* Main Panel Content */}

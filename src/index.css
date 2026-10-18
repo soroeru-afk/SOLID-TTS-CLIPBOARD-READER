@@ -188,16 +188,15 @@ body {
 /* Application Layout Classes */
 .app-card {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   border: none;
   background-color: var(--bg-panel);
   box-shadow: none;
-  overflow-x: hidden;
+  overflow: hidden;
   box-sizing: border-box;
   font-size: var(--font-size-current);
-  transition: all 0.2s ease;
 }
 
 .app-header {
@@ -586,6 +585,7 @@ input[type="range"]::-moz-range-thumb {
 .avatar-video-element.fit-auto {
   width: 100%;
   height: auto;
+  max-height: calc(100vh - 185px);
   object-fit: contain;
 }
 
