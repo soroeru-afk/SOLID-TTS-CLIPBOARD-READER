@@ -178,7 +178,7 @@ body {
 
 #root {
   width: 100vw;
-  height: 100vh;
+  min-height: 100vh;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -187,22 +187,34 @@ body {
 /* Application Layout Classes */
 .app-card {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   border: none;
   background-color: var(--bg-panel);
   box-shadow: none;
-  overflow: hidden;
+  overflow-y: auto;
   box-sizing: border-box;
   font-size: var(--font-size-current);
+}
+
+.app-card.mode-mini {
+  min-height: 0;
+  height: auto;
+}
+
+.app-card.mode-slim {
+  min-height: 0;
+  height: auto;
+  background-color: var(--bg-header);
+  overflow: hidden;
 }
 
 .app-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
+  padding: 8px 12px;
   background-color: var(--bg-header);
   color: var(--text-header);
   border-bottom: 1px solid var(--border-app);
@@ -222,11 +234,49 @@ body {
 .status-badge {
   font-family: monospace;
   font-size: calc(var(--font-size-current) * 0.85);
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.25);
   color: var(--text-secondary);
   border: 1px solid var(--border-app);
+}
+
+.btn-mode-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--border-btn-secondary);
+  background-color: var(--bg-btn-secondary);
+  color: var(--text-btn-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-mode-icon:hover {
+  border-color: var(--bg-btn-primary);
+  color: var(--bg-btn-primary);
+}
+
+.btn-mode-icon.active {
+  background-color: var(--bg-btn-primary);
+  color: var(--text-btn-primary);
+  border-color: var(--bg-btn-primary);
+}
+
+.slim-bar-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  width: 100%;
+  box-sizing: border-box;
+  background-color: var(--bg-header);
+  border-bottom: 1px solid var(--border-app);
 }
 
 .tabs-container {

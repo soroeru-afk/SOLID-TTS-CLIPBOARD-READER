@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2 } from "lucide-react";
+import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2, PanelTop, Minus } from "lucide-react";
 
 // Themes configuration
 const THEMES: Record<string, { label: string; headerColor: string }> = {
@@ -179,6 +179,12 @@ export default function App() {
 
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
   const [vidVisible, setVidVisible] = useState(() => localStorage.getItem("solid-tts-vid-visible") !== "0"); // デフォルトON
+  const [viewMode, setViewMode] = useState<"video" | "mini" | "slim">(() => {
+    const saved = localStorage.getItem("solid-tts-view-mode");
+    if (saved === "video" || saved === "mini" || saved === "slim") return saved as "video" | "mini" | "slim";
+    const v = localStorage.getItem("solid-tts-vid-visible");
+    return v === "0" ? "mini" : "video";
+  });
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -398,10 +404,39 @@ export default function App() {
     else if (status === "再生中" && !isPaused) playAvatarVideo();
   };
 
+  const changeViewMode = (mode: "video" | "mini" | "slim") => {
+    setViewMode(mode);
+    localStorage.setItem("solid-tts-view-mode", mode);
+
+    if (mode === "video") {
+      setVidVisible(true);
+      localStorage.setItem("solid-tts-vid-visible", "1");
+      if (typeof window !== "undefined" && typeof window.resizeTo === "function") {
+        const targetH = vidMode === "expanded" ? 920 : 840;
+        try { window.resizeTo(380, targetH); } catch (e) {}
+      }
+    } else if (mode === "mini") {
+      setVidVisible(false);
+      localStorage.setItem("solid-tts-vid-visible", "0");
+      setActiveTab("voice"); // 強制的に音声コントロールタブ！
+      if (typeof window !== "undefined" && typeof window.resizeTo === "function") {
+        try { window.resizeTo(380, 490); } catch (e) {}
+      }
+    } else if (mode === "slim") {
+      setVidVisible(false);
+      localStorage.setItem("solid-tts-vid-visible", "0");
+      if (typeof window !== "undefined" && typeof window.resizeTo === "function") {
+        try { window.resizeTo(520, 80); } catch (e) {}
+      }
+    }
+  };
+
   const toggleVidVisible = () => {
-    const next = !vidVisible;
-    setVidVisible(next);
-    localStorage.setItem("solid-tts-vid-visible", next ? "1" : "0");
+    if (viewMode === "video") {
+      changeViewMode("mini");
+    } else {
+      changeViewMode("video");
+    }
   };
 
   const handleThemeSelect = (newTheme: string) => {
@@ -764,47 +799,132 @@ export default function App() {
   };
 
   return (
-    <div className="app-card">
+    <div className={`app-card mode-${viewMode}`}>
       {/* Header */}
       <div className="app-header">
         <span className="header-title">
           <Volume2 size={13} style={{ color: "var(--bg-btn-primary)" }} />
           SOLID TTS CLIPBOARD READER
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {videoBlobUrl && (
-            <button
-              onClick={toggleVidVisible}
-              className="btn-icon-subtle"
-              title={vidVisible ? "動画枠を非表示" : "動画枠を表示"}
-            >
-              {vidVisible ? <Eye size={12} /> : <EyeOff size={12} />}
-            </button>
-          )}
-          <span className="status-badge">{status}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+          {/* モード切替ボタングループ（ミュージックプレイヤー互換） */}
+          <button
+            onClick={() => changeViewMode("video")}
+            className={`btn-mode-icon ${viewMode === "video" ? "active" : ""}`}
+            title="動画・標準モード (アバター動画を表示)"
+          >
+            <Video size={12} />
+          </button>
+          <button
+            onClick={() => changeViewMode("mini")}
+            className={`btn-mode-icon ${viewMode === "mini" ? "active" : ""}`}
+            title="ミニパネルモード (動画非表示・音声コントロール直結)"
+          >
+            <PanelTop size={12} />
+          </button>
+          <button
+            onClick={() => changeViewMode("slim")}
+            className={`btn-mode-icon ${viewMode === "slim" ? "active" : ""}`}
+            title="ミニバーモード (極小スリムバー)"
+          >
+            <Minus size={12} />
+          </button>
+
+          <span className="status-badge" style={{ marginLeft: "2px" }}>{status}</span>
         </div>
       </div>
 
-      {/* ── 最上部キャラクタースロット切替タブ（カオルさまご要望機能） ── */}
-      <div className="tabs-container">
-        {[0, 1, 2].map((idx) => (
-          <button
-            key={idx}
-            onClick={() => switchCharacterSlot(idx)}
-            className="tab-button"
-            style={{
-              background: vidSlot === idx ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
-              color: vidSlot === idx ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
-            }}
-            title={`スロット${idx + 1}: ${slotNames[idx]}（動画・音声・速度を完全同期）`}
-          >
-            {slotNames[idx] || `スロット ${idx + 1}`}
-          </button>
-        ))}
-      </div>
+      {viewMode === "slim" ? (
+        /* ミニバーモード (極小スリムバー) */
+        <div className="slim-bar-content">
+          {/* スロット選択 1 / 2 / 3 */}
+          <div style={{ display: "flex", gap: "3px", flexShrink: 0 }}>
+            {[0, 1, 2].map((idx) => (
+              <button
+                key={idx}
+                onClick={() => switchCharacterSlot(idx)}
+                style={{
+                  padding: "3px 8px",
+                  fontSize: "10px",
+                  fontWeight: "bold",
+                  background: vidSlot === idx ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+                  color: vidSlot === idx ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
+                  border: "1px solid var(--border-btn-secondary)",
+                  borderRadius: "3px",
+                  cursor: "pointer"
+                }}
+                title={slotNames[idx]}
+              >
+                {idx + 1}
+              </button>
+            ))}
+          </div>
 
-      {/* アバター動画プレビュー領域（動画があり、かつ表示ONの場合に常時上部へ表示） */}
-      {videoBlobUrl && vidVisible && (
+          {/* クリップボード読み上げ */}
+          <button
+            onClick={readClipboard}
+            className="btn-primary"
+            style={{
+              padding: "4px 10px",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              fontSize: "10px",
+              fontWeight: "bold",
+              flexShrink: 0
+            }}
+            title="クリップボードの文章を即時読み上げ"
+          >
+            <Clipboard size={11} />
+            <span>読み上げ</span>
+          </button>
+
+          {/* 再生 / 一時停止 / 全停止 */}
+          <div style={{ display: "flex", gap: "3px", flexShrink: 0 }}>
+            <button
+              onClick={togglePause}
+              className="btn-secondary"
+              style={{ padding: "4px 8px", fontSize: "10px" }}
+              title={isPaused ? "再開" : "一時停止"}
+            >
+              {isPaused ? <Play size={10} /> : <Pause size={10} />}
+            </button>
+            <button
+              onClick={stopSpeaking}
+              className="btn-secondary"
+              style={{ padding: "4px 8px", fontSize: "10px" }}
+              title="全停止"
+            >
+              <Square size={10} />
+            </button>
+          </div>
+
+          <div style={{ marginLeft: "auto", fontSize: "9px", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+            話速: {speed.toFixed(1)}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ── 最上部キャラクタースロット切替タブ（カオルさまご要望機能） ── */}
+          <div className="tabs-container">
+            {[0, 1, 2].map((idx) => (
+              <button
+                key={idx}
+                onClick={() => switchCharacterSlot(idx)}
+                className="tab-button"
+                style={{
+                  background: vidSlot === idx ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
+                  color: vidSlot === idx ? "var(--text-tab-active)" : "var(--text-tab-inactive)"
+                }}
+                title={`スロット${idx + 1}: ${slotNames[idx]}（動画・音声・速度を完全同期）`}
+              >
+                {slotNames[idx] || `スロット ${idx + 1}`}
+              </button>
+            ))}
+          </div>
+
+          {/* アバター動画プレビュー領域（動画があり、かつ video モード時のみ常時上部へ表示） */}
+          {videoBlobUrl && vidVisible && viewMode === "video" && (
         <div
           className="avatar-video-wrapper"
           style={{
@@ -1367,6 +1487,8 @@ export default function App() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
