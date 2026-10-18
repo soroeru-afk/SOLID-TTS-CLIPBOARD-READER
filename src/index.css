@@ -301,7 +301,8 @@ body {
 
 .panel-content {
   flex: 1;
-  padding: 14px;
+  min-height: 180px;
+  padding: 12px 14px;
   overflow-y: auto;
   box-sizing: border-box;
   display: flex;
@@ -411,7 +412,82 @@ body {
   color: var(--text-primary);
   font-family: inherit;
   cursor: pointer;
+  box-sizing: border-box;
 }
+
+.select-field option {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+  padding: 6px 10px;
+}
+
+/* Voice Selector Grid (一郎 / 遥か ワンタッチ選択) */
+.voice-selector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.voice-card-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-btn-secondary);
+  background-color: var(--bg-btn-secondary);
+  color: var(--text-btn-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  text-align: left;
+}
+
+.voice-card-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-app);
+}
+
+.voice-card-btn.active {
+  background-color: var(--bg-btn-primary);
+  color: var(--text-btn-primary);
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.voice-card-avatar {
+  font-size: 1.4em;
+  line-height: 1;
+}
+
+.voice-card-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.voice-card-title {
+  font-weight: bold;
+  font-size: calc(var(--font-size-current) * 1.05);
+}
+
+.voice-card-sub {
+  font-size: calc(var(--font-size-current) * 0.8);
+  opacity: 0.85;
+}
+
+.voice-card-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.25);
+  font-weight: bold;
+}
+
 
 /* Action button strip */
 .actions-strip {
@@ -565,7 +641,7 @@ input[type="range"]::-moz-range-thumb {
   flex-shrink: 0;
   position: relative;
   transition: max-height 0.25s ease, opacity 0.2s ease;
-  max-height: calc(100vh - 205px);
+  max-height: min(480px, calc(100vh - 360px));
 }
 
 .avatar-video-wrapper.collapsed {
@@ -586,7 +662,7 @@ input[type="range"]::-moz-range-thumb {
 .avatar-video-element.fit-auto {
   width: 100%;
   height: auto;
-  max-height: calc(100vh - 205px);
+  max-height: min(480px, calc(100vh - 360px));
   object-fit: contain;
 }
 

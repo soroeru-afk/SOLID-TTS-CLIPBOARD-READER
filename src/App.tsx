@@ -84,8 +84,8 @@ export default function App() {
   const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem("aist-tts-font-size") || "13"));
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("aist-tts-active-tab") || "voice");
 
-  // Collapsible states (default to collapsed)
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  // Collapsible states (default to open for immediate accessibility)
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
 
   const [textToRead, setTextToRead] = useState("");
@@ -191,12 +191,11 @@ export default function App() {
       localStorage.setItem("solid-tts-vid-collapsed", next ? "1" : "0");
       if (next) {
         setIsTextareaExpanded(false);
-        setIsCollapsed(true);
       }
       // PWAウィンドウの自動リサイズ追従（カオルさまご要望機能）
       try {
         if (window.resizeTo && window.outerWidth) {
-          const targetH = next ? 340 : 960;
+          const targetH = next ? 560 : 960;
           window.resizeTo(window.outerWidth, targetH);
         }
       } catch (e) {}
@@ -332,9 +331,9 @@ export default function App() {
     metaThemeColor.setAttribute("content", headerColor);
   }, [theme]);
 
-  // Reset collapse state when switching tabs
+  // Maintain open state when switching tabs for easy access
   useEffect(() => {
-    setIsCollapsed(true);
+    setIsCollapsed(false);
   }, [activeTab]);
 
   useEffect(() => {
@@ -407,7 +406,31 @@ export default function App() {
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = parseInt(e.target.value);
     setSelectedVoiceIdx(idx);
+    if (voices[idx]) {
+      localStorage.setItem(`solid-tts-slot-${vidSlot}-voice`, voices[idx].name);
+    }
   };
+
+  // 一郎（男性声） / 遥か（女性声） ワンタッチ選択ハンドラー（カオルさまご要望機能）
+  const selectPredefinedVoice = (type: "ichiro" | "haruka") => {
+    if (!voices.length) return;
+    let targetIdx = -1;
+    if (type === "ichiro") {
+      targetIdx = voices.findIndex((v) => /ichiro|male|google 日本語|google/i.test(v.name));
+      if (targetIdx < 0) targetIdx = 0;
+    } else {
+      targetIdx = voices.findIndex((v) => /haruka|female|ayumi|sayaka/i.test(v.name));
+      if (targetIdx < 0) targetIdx = voices.length > 1 ? 1 : 0;
+    }
+    setSelectedVoiceIdx(targetIdx);
+    if (voices[targetIdx]) {
+      localStorage.setItem(`solid-tts-slot-${vidSlot}-voice`, voices[targetIdx].name);
+    }
+  };
+
+  const currentVoiceName = voices[selectedVoiceIdx]?.name || "";
+  const isIchiroSelected = /ichiro|male|google 日本語/i.test(currentVoiceName) || (!/haruka|female|ayumi|sayaka/i.test(currentVoiceName) && selectedVoiceIdx === 0);
+  const isHarukaSelected = /haruka|female|ayumi|sayaka/i.test(currentVoiceName) || (!isIchiroSelected && selectedVoiceIdx > 0);
 
   // Text chunking for Web Speech API stability
   const splitIntoChunks = (text: string, maxLen = 140): string[] => {
@@ -642,7 +665,7 @@ export default function App() {
           <div
             className={`avatar-video-wrapper ${isVidCollapsed ? "collapsed" : ""}`}
             style={{
-              maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "calc(100vh - 205px)" : `${vidHeight}px`)
+              maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "min(480px, calc(100vh - 360px))" : `${vidHeight}px`)
             }}
           >
             <video
@@ -655,7 +678,7 @@ export default function App() {
               className={`avatar-video-element fit-${vidFitMode}`}
               style={{
                 cursor: "pointer",
-                maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "calc(100vh - 205px)" : `${vidHeight}px`)
+                maxHeight: isVidCollapsed ? "0px" : (vidFitMode === "auto" ? "min(480px, calc(100vh - 360px))" : `${vidHeight}px`)
               }}
               title="クリックで一時停止 / 再生"
             />
@@ -851,21 +874,60 @@ export default function App() {
               >
                 {/* Settings controls */}
                 <div className="settings-grid" style={{ paddingTop: "10px" }}>
-                  {/* Voice select */}
+                  {/* 一郎（男性声） / 遥か（女性声） ワンタッチボイス選択（カオルさまご要望機能） */}
                   <div className="setting-row">
-                    <label className="field-label">ボイス</label>
-                    <select
-                      value={selectedVoiceIdx}
-                      onChange={handleVoiceChange}
-                      className="select-field"
-                    >
-                      {voices.map((v, i) => (
-                        <option key={i} value={i}>
-                          {v.name} ({v.lang})
-                        </option>
-                      ))}
-                      {!voices.length && <option value="0">音声読み込み中...</option>}
-                    </select>
+                    <div className="setting-label-row">
+                      <span>ボイス選択 (話者)</span>
+                      <span style={{ fontSize: "0.85em", opacity: 0.85 }}>
+                        {isIchiroSelected ? "👨 一郎（男性声）" : isHarukaSelected ? "👩 遥か（女性声）" : (voices[selectedVoiceIdx]?.name || "日本語")}
+                      </span>
+                    </div>
+                    <div className="voice-selector-grid">
+                      <button
+                        type="button"
+                        onClick={() => selectPredefinedVoice("ichiro")}
+                        className={`voice-card-btn ${isIchiroSelected ? "active" : ""}`}
+                        title="一郎（男性ボイス）に切り替え"
+                      >
+                        <span className="voice-card-avatar">👨</span>
+                        <div className="voice-card-text">
+                          <span className="voice-card-title">一郎</span>
+                          <span className="voice-card-sub">男性ボイス</span>
+                        </div>
+                        {isIchiroSelected && <span className="voice-card-badge">選択中</span>}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => selectPredefinedVoice("haruka")}
+                        className={`voice-card-btn ${isHarukaSelected ? "active" : ""}`}
+                        title="遥か（女性ボイス）に切り替え"
+                      >
+                        <span className="voice-card-avatar">👩</span>
+                        <div className="voice-card-text">
+                          <span className="voice-card-title">遥か</span>
+                          <span className="voice-card-sub">女性ボイス</span>
+                        </div>
+                        {isHarukaSelected && <span className="voice-card-badge">選択中</span>}
+                      </button>
+                    </div>
+
+                    {/* 詳細全ボイスリスト（環境別全音声ドロップダウン） */}
+                    <div style={{ marginTop: "6px" }}>
+                      <select
+                        value={selectedVoiceIdx}
+                        onChange={handleVoiceChange}
+                        className="select-field"
+                        title="インストール済み全音声リストから直接指定"
+                      >
+                        {voices.map((v, i) => (
+                          <option key={i} value={i}>
+                            {v.name} ({v.lang})
+                          </option>
+                        ))}
+                        {!voices.length && <option value="0">音声読み込み中...</option>}
+                      </select>
+                    </div>
                   </div>
 
                   {/* Speed slider */}
