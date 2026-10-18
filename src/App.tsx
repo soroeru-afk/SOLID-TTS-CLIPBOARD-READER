@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2, PanelTop, Minus } from "lucide-react";
+import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2, PanelTop } from "lucide-react";
 
 // Themes configuration
 const THEMES: Record<string, { label: string; headerColor: string }> = {
@@ -15,6 +15,17 @@ const FONTS = {
   roboto: { label: "Roboto", css: "Roboto,Arial,sans-serif" },
   noto: { label: "Noto Sans JP", css: "'Noto Sans JP','Hiragino Kaku Gothic ProN',sans-serif" },
   rounded: { label: "丸ゴシック", css: "'M PLUS Rounded 1c','Hiragino Maru Gothic Pro',sans-serif" }
+};
+
+// Window Sizes (Music Player compatible)
+const DEFAULT_WINDOW_SIZES: Record<"video" | "mini", { width: number; height: number }> = {
+  video: { width: 380, height: 860 },
+  mini: { width: 380, height: 490 }
+};
+
+const MIN_WINDOW_SIZES: Record<"video" | "mini", { width: number; height: number }> = {
+  video: { width: 300, height: 500 },
+  mini: { width: 300, height: 350 }
 };
 
 // IndexedDB for Avatar Videos (3 Slots)
@@ -179,12 +190,69 @@ export default function App() {
 
   const [vidSyncEnabled, setVidSyncEnabled] = useState(() => localStorage.getItem("solid-tts-vid-sync") !== "0"); // デフォルトON
   const [vidVisible, setVidVisible] = useState(() => localStorage.getItem("solid-tts-vid-visible") !== "0"); // デフォルトON
-  const [viewMode, setViewMode] = useState<"video" | "mini" | "slim">(() => {
+  const [viewMode, setViewMode] = useState<"video" | "mini">(() => {
     const saved = localStorage.getItem("solid-tts-view-mode");
-    if (saved === "video" || saved === "mini" || saved === "slim") return saved as "video" | "mini" | "slim";
+    if (saved === "video" || saved === "mini") return saved as "video" | "mini";
     const v = localStorage.getItem("solid-tts-vid-visible");
     return v === "0" ? "mini" : "video";
   });
+
+  // ウィンドウサイズ記憶（ミュージックプレイヤー完全互換）
+  const [windowSizes, setWindowSizes] = useState<Record<"video" | "mini", { width: number; height: number }>>(() => {
+    try {
+      const saved = localStorage.getItem("solid-tts-window-sizes");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          video: {
+            width: typeof parsed.video?.width === "number" ? Math.max(parsed.video.width, 300) : DEFAULT_WINDOW_SIZES.video.width,
+            height: typeof parsed.video?.height === "number" ? Math.max(parsed.video.height, 500) : DEFAULT_WINDOW_SIZES.video.height
+          },
+          mini: {
+            width: typeof parsed.mini?.width === "number" ? Math.max(parsed.mini.width, 300) : DEFAULT_WINDOW_SIZES.mini.width,
+            height: typeof parsed.mini?.height === "number" ? Math.max(parsed.mini.height, 350) : DEFAULT_WINDOW_SIZES.mini.height
+          }
+        };
+      }
+    } catch (e) {}
+    return DEFAULT_WINDOW_SIZES;
+  });
+
+  // ユーザーが手動で広げた下側（ウィンドウ高さ・幅）を各モードごとに自動記憶・永続保存
+  useEffect(() => {
+    let resizeTimer: any;
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (typeof document !== "undefined" && document.fullscreenElement) return;
+        const w = window.outerWidth || window.innerWidth;
+        const h = window.outerHeight || window.innerHeight;
+        const min = MIN_WINDOW_SIZES[viewMode];
+        if (w >= min.width && h >= min.height) {
+          setWindowSizes((prev) => {
+            const current = prev[viewMode];
+            if (Math.abs(current.width - w) > 10 || Math.abs(current.height - h) > 10) {
+              const updated = {
+                ...prev,
+                [viewMode]: { width: Math.round(w), height: Math.round(h) }
+              };
+              try {
+                localStorage.setItem("solid-tts-window-sizes", JSON.stringify(updated));
+              } catch (e) {}
+              return updated;
+            }
+            return prev;
+          });
+        }
+      }, 300);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      clearTimeout(resizeTimer);
+    };
+  }, [viewMode]);
+
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -404,29 +472,24 @@ export default function App() {
     else if (status === "再生中" && !isPaused) playAvatarVideo();
   };
 
-  const changeViewMode = (mode: "video" | "mini" | "slim") => {
+  const changeViewMode = (mode: "video" | "mini") => {
     setViewMode(mode);
     localStorage.setItem("solid-tts-view-mode", mode);
+
+    const target = windowSizes[mode] || DEFAULT_WINDOW_SIZES[mode];
 
     if (mode === "video") {
       setVidVisible(true);
       localStorage.setItem("solid-tts-vid-visible", "1");
       if (typeof window !== "undefined" && typeof window.resizeTo === "function") {
-        const targetH = vidMode === "expanded" ? 920 : 840;
-        try { window.resizeTo(380, targetH); } catch (e) {}
+        try { window.resizeTo(target.width, target.height); } catch (e) {}
       }
     } else if (mode === "mini") {
       setVidVisible(false);
       localStorage.setItem("solid-tts-vid-visible", "0");
       setActiveTab("voice"); // 強制的に音声コントロールタブ！
       if (typeof window !== "undefined" && typeof window.resizeTo === "function") {
-        try { window.resizeTo(380, 490); } catch (e) {}
-      }
-    } else if (mode === "slim") {
-      setVidVisible(false);
-      localStorage.setItem("solid-tts-vid-visible", "0");
-      if (typeof window !== "undefined" && typeof window.resizeTo === "function") {
-        try { window.resizeTo(520, 80); } catch (e) {}
+        try { window.resizeTo(target.width, target.height); } catch (e) {}
       }
     }
   };
@@ -807,7 +870,7 @@ export default function App() {
           SOLID TTS CLIPBOARD READER
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-          {/* モード切替ボタングループ（ミュージックプレイヤー互換） */}
+          {/* モード切替ボタングループ（動画モード ↔ ミニパネルモード） */}
           <button
             onClick={() => changeViewMode("video")}
             className={`btn-mode-icon ${viewMode === "video" ? "active" : ""}`}
@@ -822,91 +885,13 @@ export default function App() {
           >
             <PanelTop size={12} />
           </button>
-          <button
-            onClick={() => changeViewMode("slim")}
-            className={`btn-mode-icon ${viewMode === "slim" ? "active" : ""}`}
-            title="ミニバーモード (極小スリムバー)"
-          >
-            <Minus size={12} />
-          </button>
 
           <span className="status-badge" style={{ marginLeft: "2px" }}>{status}</span>
         </div>
       </div>
 
-      {viewMode === "slim" ? (
-        /* ミニバーモード (極小スリムバー) */
-        <div className="slim-bar-content">
-          {/* スロット選択 1 / 2 / 3 */}
-          <div style={{ display: "flex", gap: "3px", flexShrink: 0 }}>
-            {[0, 1, 2].map((idx) => (
-              <button
-                key={idx}
-                onClick={() => switchCharacterSlot(idx)}
-                style={{
-                  padding: "3px 8px",
-                  fontSize: "10px",
-                  fontWeight: "bold",
-                  background: vidSlot === idx ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-                  color: vidSlot === idx ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
-                  border: "1px solid var(--border-btn-secondary)",
-                  borderRadius: "3px",
-                  cursor: "pointer"
-                }}
-                title={slotNames[idx]}
-              >
-                {idx + 1}
-              </button>
-            ))}
-          </div>
-
-          {/* クリップボード読み上げ */}
-          <button
-            onClick={readClipboard}
-            className="btn-primary"
-            style={{
-              padding: "4px 10px",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-              fontSize: "10px",
-              fontWeight: "bold",
-              flexShrink: 0
-            }}
-            title="クリップボードの文章を即時読み上げ"
-          >
-            <Clipboard size={11} />
-            <span>読み上げ</span>
-          </button>
-
-          {/* 再生 / 一時停止 / 全停止 */}
-          <div style={{ display: "flex", gap: "3px", flexShrink: 0 }}>
-            <button
-              onClick={togglePause}
-              className="btn-secondary"
-              style={{ padding: "4px 8px", fontSize: "10px" }}
-              title={isPaused ? "再開" : "一時停止"}
-            >
-              {isPaused ? <Play size={10} /> : <Pause size={10} />}
-            </button>
-            <button
-              onClick={stopSpeaking}
-              className="btn-secondary"
-              style={{ padding: "4px 8px", fontSize: "10px" }}
-              title="全停止"
-            >
-              <Square size={10} />
-            </button>
-          </div>
-
-          <div style={{ marginLeft: "auto", fontSize: "9px", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-            話速: {speed.toFixed(1)}
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* ── 最上部キャラクタースロット切替タブ（カオルさまご要望機能） ── */}
-          <div className="tabs-container">
+      {/* ── 最上部キャラクタースロット切替タブ（カオルさまご要望機能） ── */}
+      <div className="tabs-container">
             {[0, 1, 2].map((idx) => (
               <button
                 key={idx}
@@ -1487,8 +1472,6 @@ export default function App() {
           </div>
         )}
       </div>
-      </>
-      )}
     </div>
   );
 }
