@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2 } from "lucide-react";
 
 // Themes configuration
-const THEMES = {
-  light: { label: "ライト" },
-  dark: { label: "ダーク" },
-  pastel: { label: "モノトーン" },
-  brown: { label: "ブラウン" },
-  ocean: { label: "オーシャン" }
+const THEMES: Record<string, { label: string; headerColor: string }> = {
+  light: { label: "ライト", headerColor: "#f1f3f4" },
+  dark: { label: "ダーク", headerColor: "#1b1b2a" },
+  pastel: { label: "モノトーン", headerColor: "#111111" },
+  brown: { label: "ブラウン", headerColor: "#4c2c19" },
+  ocean: { label: "パステルピンク", headerColor: "#B07A76" }
 };
 
 const FONTS = {
@@ -399,6 +399,16 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("aist-tts-theme", theme);
+
+    // ブラウザ・PWA上部ヘッダー色（<meta name="theme-color">）をテーマ色に動的同期
+    const headerColor = THEMES[theme]?.headerColor || "#1b1b2a";
+    let metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (!metaTheme) {
+      metaTheme = document.createElement("meta");
+      metaTheme.setAttribute("name", "theme-color");
+      document.head.appendChild(metaTheme);
+    }
+    metaTheme.setAttribute("content", headerColor);
   }, [theme]);
 
   // Reset collapse state when switching tabs
@@ -1278,87 +1288,67 @@ export default function App() {
         {/* ── テーマ＆フォントタブ ── */}
         {activeTab === "theme" && (
           <div className="tab-pane">
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="btn-action"
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-                borderStyle: "dashed",
-                borderColor: "var(--border-btn-secondary)"
-              }}
+            <div
+              className="space-y-4"
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
             >
-              <Palette size={11} />
-              {isCollapsed ? "⚙️ テーマ・フォント設定を展開" : "⚙️ テーマ・フォント設定を閉じる"}
-              {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-            </button>
-
-            {!isCollapsed && (
-              <div
-                className="space-y-4"
-                style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}
-              >
-                {/* Theme select */}
-                <div className="setting-row">
-                  <label className="field-label" style={{ marginBottom: "6px" }}>
-                    カラーテーマ
-                  </label>
-                  <div className="themes-grid">
-                    {Object.entries(THEMES).map(([key, item]) => (
-                      <button
-                        key={key}
-                        onClick={() => setTheme(key)}
-                        className="theme-button"
-                        style={{
-                          background: theme === key ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-                          color: theme === key ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
-                          borderColor: theme === key ? "transparent" : "var(--border-btn-secondary)",
-                          outline: theme === key ? "2px solid var(--bg-btn-primary)" : "none"
-                        }}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Font selector */}
-                <div className="setting-row">
-                  <label className="field-label">パネルのフォント</label>
-                  <select
-                    value={font}
-                    onChange={(e) => setFont(e.target.value)}
-                    className="select-field"
-                  >
-                    {Object.entries(FONTS).map(([key, item]) => (
-                      <option key={key} value={key}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Font Size Selector（拡大・反映強化） */}
-                <div className="setting-row">
-                  <label className="field-label">文字サイズ（パネル全体の文字拡大）</label>
-                  <select
-                    value={fontSize}
-                    onChange={(e) => setFontSize(parseInt(e.target.value))}
-                    className="select-field"
-                  >
-                    <option value="10">10px (小)</option>
-                    <option value="11">11px (標準)</option>
-                    <option value="13">13px (やや大)</option>
-                    <option value="15">15px (大)</option>
-                    <option value="17">17px (特大)</option>
-                    <option value="19">19px (極大)</option>
-                  </select>
+              {/* Theme select */}
+              <div className="setting-row">
+                <label className="field-label" style={{ marginBottom: "6px" }}>
+                  カラーテーマ
+                </label>
+                <div className="themes-grid">
+                  {Object.entries(THEMES).map(([key, item]) => (
+                    <button
+                      key={key}
+                      onClick={() => setTheme(key)}
+                      className="theme-button"
+                      style={{
+                        background: theme === key ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
+                        color: theme === key ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
+                        borderColor: theme === key ? "transparent" : "var(--border-btn-secondary)",
+                        outline: theme === key ? "2px solid var(--bg-btn-primary)" : "none"
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
+
+              {/* Font selector */}
+              <div className="setting-row">
+                <label className="field-label">パネルのフォント</label>
+                <select
+                  value={font}
+                  onChange={(e) => setFont(e.target.value)}
+                  className="select-field"
+                >
+                  {Object.entries(FONTS).map(([key, item]) => (
+                    <option key={key} value={key}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Font Size Selector（拡大・反映強化） */}
+              <div className="setting-row">
+                <label className="field-label">文字サイズ（パネル全体の文字拡大）</label>
+                <select
+                  value={fontSize}
+                  onChange={(e) => setFontSize(parseInt(e.target.value))}
+                  className="select-field"
+                >
+                  <option value="10">10px (小)</option>
+                  <option value="11">11px (標準)</option>
+                  <option value="13">13px (やや大)</option>
+                  <option value="15">15px (大)</option>
+                  <option value="17">17px (特大)</option>
+                  <option value="19">19px (極大)</option>
+                </select>
+              </div>
+            </div>
           </div>
         )}
       </div>
