@@ -92,32 +92,41 @@ export default function App() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceIdx, setSelectedVoiceIdx] = useState<number>(0);
 
-  // Presets state
-  const [currentPreset, setCurrentPreset] = useState(() => localStorage.getItem("aist-tts-preset-active") || "A");
-  const [presetALabel, setPresetALabel] = useState(() => localStorage.getItem("aist-tts-preset-a-label") || "ボイス A");
-  const [presetBLabel, setPresetBLabel] = useState(() => localStorage.getItem("aist-tts-preset-b-label") || "ボイス B");
-  const [tempPresetLabel, setTempPresetLabel] = useState("");
+  // =============================================
+  // キャラクター・スロット統合管理 (スロット1/2/3)
+  // =============================================
+  const [slotNames, setSlotNames] = useState<string[]>(() => [
+    localStorage.getItem("solid-tts-slot-0-name") || "🤖 ロボット",
+    localStorage.getItem("solid-tts-slot-1-name") || "👩 女性",
+    localStorage.getItem("solid-tts-slot-2-name") || "👨 男性"
+  ]);
 
-  // Sync temporary input label when active preset or labels change
-  useEffect(() => {
-    setTempPresetLabel(currentPreset === "A" ? presetALabel : presetBLabel);
-  }, [currentPreset, presetALabel, presetBLabel]);
+  const [vidSlot, setVidSlot] = useState(() => {
+    const v = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
+    return isNaN(v) || v < 0 || v >= VID_SLOT_COUNT ? 0 : v;
+  });
 
-  // Temporary local state for sliders that syncs with current preset
+  const getSlotVidSpeed = (slot: number) => {
+    const v = localStorage.getItem(`solid-tts-vid-speed-slot-${slot}`);
+    if (v) return parseFloat(v);
+    const old = localStorage.getItem("solid-tts-vid-speed");
+    return old ? parseFloat(old) : 1.25;
+  };
+
+  const [vidSpeed, setVidSpeed] = useState(() => getSlotVidSpeed(vidSlot));
+
+  // スロット別音声設定（話速・音程・音量）
   const [speed, setSpeed] = useState(() => {
-    const active = localStorage.getItem("aist-tts-preset-active") || "A";
-    const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
-    return parseFloat(localStorage.getItem(prefix + "speed") || "1.2");
+    const v = localStorage.getItem(`solid-tts-slot-${vidSlot}-speed`);
+    return v ? parseFloat(v) : (vidSlot === 0 ? 1.25 : vidSlot === 1 ? 1.2 : 1.15);
   });
   const [pitch, setPitch] = useState(() => {
-    const active = localStorage.getItem("aist-tts-preset-active") || "A";
-    const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
-    return parseFloat(localStorage.getItem(prefix + "pitch") || "1.0");
+    const v = localStorage.getItem(`solid-tts-slot-${vidSlot}-pitch`);
+    return v ? parseFloat(v) : (vidSlot === 0 ? 0.95 : vidSlot === 1 ? 1.1 : 1.0);
   });
   const [volume, setVolume] = useState(() => {
-    const active = localStorage.getItem("aist-tts-preset-active") || "A";
-    const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
-    return parseInt(localStorage.getItem(prefix + "volume") || "80");
+    const v = localStorage.getItem(`solid-tts-slot-${vidSlot}-volume`);
+    return v ? parseInt(v) : 80;
   });
 
   const [status, setStatus] = useState("待機中");
@@ -127,22 +136,6 @@ export default function App() {
   const speechQueue = useRef<string[]>([]);
   const currentChunkText = useRef<string>("");
   const currentChunkCharIndex = useRef<number>(0);
-
-  // =============================================
-  // アバター動画（口パク動画）State & 制御
-  // =============================================
-  const getSlotVidSpeed = (slot: number) => {
-    const v = localStorage.getItem(`solid-tts-vid-speed-slot-${slot}`);
-    if (v) return parseFloat(v);
-    const old = localStorage.getItem("solid-tts-vid-speed");
-    return old ? parseFloat(old) : 1.25;
-  };
-
-  const [vidSlot, setVidSlot] = useState(() => {
-    const v = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
-    return isNaN(v) || v < 0 || v >= VID_SLOT_COUNT ? 0 : v;
-  });
-  const [vidSpeed, setVidSpeed] = useState(() => getSlotVidSpeed(vidSlot));
   const [vidHeight, setVidHeight] = useState(() => parseInt(localStorage.getItem("solid-tts-vid-height") || "480"));
   const [vidFitMode, setVidFitMode] = useState<"auto" | "cover" | "contain">(() => (localStorage.getItem("solid-tts-vid-fit") as "auto" | "cover" | "contain") || "auto"); // デフォルト上下ノーカット全幅
   const [isVidCollapsed, setIsVidCollapsed] = useState(() => localStorage.getItem("solid-tts-vid-collapsed") === "1"); // 動画折りたたみ状態
@@ -191,16 +184,22 @@ export default function App() {
     localStorage.setItem("solid-tts-vid-fit", next);
   };
 
-  // 動画の折りたたみトグル（動画を閉じる時は下のパネルも追従してコンパクトに折りたたむ）
+  // 動画の折りたたみトグル（動画を閉じる時は下のパネルも追従し、PWAウィンドウも自動リサイズ）
   const toggleVidCollapse = () => {
     setIsVidCollapsed(prev => {
       const next = !prev;
       localStorage.setItem("solid-tts-vid-collapsed", next ? "1" : "0");
       if (next) {
-        // 動画を閉じた時は、テキスト入力欄や詳細設定も追従して閉じる
         setIsTextareaExpanded(false);
         setIsCollapsed(true);
       }
+      // PWAウィンドウの自動リサイズ追従（カオルさまご要望機能）
+      try {
+        if (window.resizeTo && window.outerWidth) {
+          const targetH = next ? 410 : 790;
+          window.resizeTo(window.outerWidth, targetH);
+        }
+      } catch (e) {}
       return next;
     });
   };
@@ -215,16 +214,45 @@ export default function App() {
     }
   };
 
-  // スロット切り替え（スロットごとの再生速度も自動復元）
-  const switchVidSlot = (idx: number) => {
+  // キャラクター・スロット切り替え（動画・音声・速度・設定を完全同期・即時復元）
+  const switchCharacterSlot = (idx: number) => {
     pauseAvatarVideo();
     setVidSlot(idx);
     localStorage.setItem("solid-tts-vid-slot", String(idx));
-    const slotSpd = getSlotVidSpeed(idx);
-    setVidSpeed(slotSpd);
+
+    // 1. 動画再生速度の復元
+    const slotVidSpd = getSlotVidSpeed(idx);
+    setVidSpeed(slotVidSpd);
     if (videoRef.current) {
-      videoRef.current.playbackRate = slotSpd;
+      videoRef.current.playbackRate = slotVidSpd;
     }
+
+    // 2. 音声設定（speed, pitch, volume, voice）の復元
+    const slotSpd = parseFloat(localStorage.getItem(`solid-tts-slot-${idx}-speed`) || (idx === 0 ? "1.25" : idx === 1 ? "1.2" : "1.15"));
+    const slotPit = parseFloat(localStorage.getItem(`solid-tts-slot-${idx}-pitch`) || (idx === 0 ? "0.95" : idx === 1 ? "1.1" : "1.0"));
+    const slotVol = parseInt(localStorage.getItem(`solid-tts-slot-${idx}-volume`) || "80");
+    const slotVoiceName = localStorage.getItem(`solid-tts-slot-${idx}-voice`);
+
+    setSpeed(slotSpd);
+    setPitch(slotPit);
+    setVolume(slotVol);
+
+    if (slotVoiceName && voices.length > 0) {
+      const vIdx = voices.findIndex(v => v.name === slotVoiceName);
+      if (vIdx !== -1) setSelectedVoiceIdx(vIdx);
+    }
+  };
+
+  const switchVidSlot = switchCharacterSlot; // 互換エイリアス
+
+  // スロット表示名の更新
+  const updateSlotName = (idx: number, newName: string) => {
+    setSlotNames(prev => {
+      const next = [...prev];
+      next[idx] = newName;
+      localStorage.setItem(`solid-tts-slot-${idx}-name`, newName);
+      return next;
+    });
   };
 
   // アバター動画の再生・一時停止処理
@@ -324,37 +352,24 @@ export default function App() {
     localStorage.setItem("aist-tts-active-tab", activeTab);
   }, [activeTab]);
 
-  // Save active preset settings when sliders change
+  // スロット別音声設定のリアルタイム保存
   useEffect(() => {
-    const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
-    localStorage.setItem(prefix + "speed", String(speed));
-  }, [speed, currentPreset]);
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-speed`, String(speed));
+  }, [speed, vidSlot]);
 
   useEffect(() => {
-    const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
-    localStorage.setItem(prefix + "pitch", String(pitch));
-  }, [pitch, currentPreset]);
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-pitch`, String(pitch));
+  }, [pitch, vidSlot]);
 
   useEffect(() => {
-    const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
-    localStorage.setItem(prefix + "volume", String(volume));
-  }, [volume, currentPreset]);
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-volume`, String(volume));
+  }, [volume, vidSlot]);
 
-  useEffect(() => {
-    localStorage.setItem("aist-tts-preset-a-label", presetALabel);
-  }, [presetALabel]);
-
-  useEffect(() => {
-    localStorage.setItem("aist-tts-preset-b-label", presetBLabel);
-  }, [presetBLabel]);
-
-  // Sync selected voice name to preset
   useEffect(() => {
     if (voices[selectedVoiceIdx]) {
-      const prefix = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
-      localStorage.setItem(prefix + "voice", voices[selectedVoiceIdx].name);
+      localStorage.setItem(`solid-tts-slot-${vidSlot}-voice`, voices[selectedVoiceIdx].name);
     }
-  }, [selectedVoiceIdx, voices, currentPreset]);
+  }, [selectedVoiceIdx, voices, vidSlot]);
 
   // Load voices list
   useEffect(() => {
@@ -364,16 +379,13 @@ export default function App() {
       if (!jaVoices.length) jaVoices = all;
       setVoices(jaVoices);
 
-      const active = localStorage.getItem("aist-tts-preset-active") || "A";
-      const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
-      const savedName = localStorage.getItem(prefix + "voice") || "";
-      let idx = jaVoices.findIndex((v) => v.name === savedName);
-
-      if (idx < 0 && !savedName) {
-        if (active === "A") {
-          idx = jaVoices.findIndex((v) => /haruka/i.test(v.name));
-        } else {
-          idx = jaVoices.findIndex((v) => /ichiro/i.test(v.name));
+      const savedVoice = localStorage.getItem(`solid-tts-slot-${vidSlot}-voice`);
+      let idx = jaVoices.findIndex((v) => v.name === savedVoice);
+      if (idx < 0) {
+        if (vidSlot === 0) {
+          idx = jaVoices.findIndex((v) => /ichiro|male|google 日本語/i.test(v.name));
+        } else if (vidSlot === 1) {
+          idx = jaVoices.findIndex((v) => /haruka|female/i.test(v.name));
         }
       }
       if (idx < 0) idx = 0;
@@ -391,52 +403,6 @@ export default function App() {
       pauseAvatarVideo();
     };
   }, []);
-
-  const switchPreset = (presetName: string) => {
-    const prefixOld = `aist-tts-preset-${currentPreset.toLowerCase()}-`;
-    localStorage.setItem(prefixOld + "speed", String(speed));
-    localStorage.setItem(prefixOld + "pitch", String(pitch));
-    localStorage.setItem(prefixOld + "volume", String(volume));
-    if (voices[selectedVoiceIdx]) {
-      localStorage.setItem(prefixOld + "voice", voices[selectedVoiceIdx].name);
-    }
-
-    setCurrentPreset(presetName);
-    localStorage.setItem("aist-tts-preset-active", presetName);
-
-    const prefixNew = `aist-tts-preset-${presetName.toLowerCase()}-`;
-    const newSpeed = parseFloat(localStorage.getItem(prefixNew + "speed") || "1.2");
-    const newPitch = parseFloat(localStorage.getItem(prefixNew + "pitch") || "1.0");
-    const newVolume = parseInt(localStorage.getItem(prefixNew + "volume") || "80");
-    const newVoiceName = localStorage.getItem(prefixNew + "voice") || "";
-
-    setSpeed(newSpeed);
-    setPitch(newPitch);
-    setVolume(newVolume);
-
-    if (newVoiceName) {
-      const idx = voices.findIndex((v) => v.name === newVoiceName);
-      if (idx >= 0) {
-        setSelectedVoiceIdx(idx);
-      }
-    } else {
-      let idx = -1;
-      if (presetName === "A") {
-        idx = voices.findIndex((v) => /haruka/i.test(v.name));
-      } else {
-        idx = voices.findIndex((v) => /ichiro/i.test(v.name));
-      }
-      if (idx >= 0) setSelectedVoiceIdx(idx);
-    }
-  };
-
-  const handleSavePresetName = () => {
-    if (currentPreset === "A") {
-      setPresetALabel(tempPresetLabel);
-    } else {
-      setPresetBLabel(tempPresetLabel);
-    }
-  };
 
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = parseInt(e.target.value);
@@ -634,7 +600,7 @@ export default function App() {
   };
 
   return (
-    <div className="app-card">
+    <div className={`app-card ${isVidCollapsed ? "collapsed-view" : ""}`}>
       {/* Header */}
       <div className="app-header">
         <span className="header-title">
@@ -653,6 +619,21 @@ export default function App() {
           )}
           <span className="status-badge">{status}</span>
         </div>
+      </div>
+
+      {/* キャラクター・スロット切替バー (最上部固定・カオルさまご要望機能) */}
+      <div className="character-slot-bar">
+        {[0, 1, 2].map((idx) => (
+          <button
+            key={idx}
+            onClick={() => switchCharacterSlot(idx)}
+            className={`character-slot-btn ${vidSlot === idx ? "active" : ""}`}
+            title={`スロット${idx + 1}: ${slotNames[idx]} に切替（動画・音声・速度を完全同期）`}
+          >
+            <span className="slot-btn-num">{idx + 1}</span>
+            <span>{slotNames[idx]}</span>
+          </button>
+        ))}
       </div>
 
       {/* Tabs */}
@@ -786,20 +767,25 @@ export default function App() {
       <div className="panel-content">
         {activeTab === "voice" && (
           <div className="tab-pane">
-            {/* Preset select strip */}
-            <div className="preset-strip" style={{ marginBottom: "8px" }}>
-              <button
-                onClick={() => switchPreset("A")}
-                className={`preset-btn ${currentPreset === "A" ? "active" : ""}`}
-              >
-                {presetALabel}
-              </button>
-              <button
-                onClick={() => switchPreset("B")}
-                className={`preset-btn ${currentPreset === "B" ? "active" : ""}`}
-              >
-                {presetBLabel}
-              </button>
+            {/* キャラクター名（スロット表示名）編集バー */}
+            <div className="setting-row" style={{ marginBottom: "10px" }}>
+              <div className="setting-label-row">
+                <span>キャラクター名 (スロット {vidSlot + 1})</span>
+                <span style={{ opacity: 0.7 }}>動画・音声設定と連動</span>
+              </div>
+              <input
+                type="text"
+                value={slotNames[vidSlot] || ""}
+                onChange={(e) => updateSlotName(vidSlot, e.target.value)}
+                placeholder="キャラクター名を入力 (例: 🤖 ロボット)"
+                className="input-field"
+                style={{
+                  width: "100%",
+                  padding: "7px 10px",
+                  fontSize: "var(--font-size-current)",
+                  boxSizing: "border-box"
+                }}
+              />
             </div>
 
             {/* Textarea collapse toggle */}
@@ -974,15 +960,16 @@ export default function App() {
           <div className="tab-pane">
             {/* スロット選択タブ */}
             <div className="setting-row">
-              <label className="field-label">動画スロット選択（全3スロット保存）</label>
+              <label className="field-label">キャラクター・スロット選択（全3スロット保存）</label>
               <div className="slot-grid">
                 {[0, 1, 2].map((i) => (
                   <button
                     key={i}
-                    onClick={() => switchVidSlot(i)}
+                    onClick={() => switchCharacterSlot(i)}
                     className={`slot-btn ${vidSlot === i ? "active" : ""}`}
+                    title={`スロット${i + 1}: ${slotNames[i]}`}
                   >
-                    スロット {i + 1}
+                    {slotNames[i] || `スロット ${i + 1}`}
                   </button>
                 ))}
               </div>
