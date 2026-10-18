@@ -115,6 +115,30 @@ export default function App() {
   const currentChunkText = useRef<string>("");
   const currentChunkCharIndex = useRef<number>(0);
 
+  // 常に最新の発声設定を保持するRef（クロージャや非同期Stateラグによる先祖返りを100%防止）
+  const activeVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const activeSpeedRef = useRef<number>(speed);
+  const activePitchRef = useRef<number>(pitch);
+  const activeVolumeRef = useRef<number>(volume);
+
+  useEffect(() => {
+    if (voices[selectedVoiceIdx]) {
+      activeVoiceRef.current = voices[selectedVoiceIdx];
+    }
+  }, [selectedVoiceIdx, voices]);
+
+  useEffect(() => {
+    activeSpeedRef.current = speed;
+  }, [speed]);
+
+  useEffect(() => {
+    activePitchRef.current = pitch;
+  }, [pitch]);
+
+  useEffect(() => {
+    activeVolumeRef.current = volume;
+  }, [volume]);
+
   // =============================================
   // アバター動画（口パク動画）State & 制御
   // =============================================
@@ -283,6 +307,14 @@ export default function App() {
       }
     }
 
+    // 発声設定Refを即時同期（ワンフレーズ目だけでなく最後のチャンクまで100%この声を維持）
+    if (nextVoice) {
+      activeVoiceRef.current = nextVoice;
+    }
+    activeSpeedRef.current = savedSpeed;
+    activePitchRef.current = savedPitch;
+    activeVolumeRef.current = savedVolume;
+
     // 3. 動画のロード
     await loadSlotVideo(idx);
 
@@ -292,7 +324,7 @@ export default function App() {
       playAvatarVideo();
       const gen = ttsGeneration.current;
       setTimeout(() => {
-        playNextChunk(gen, nextVoice, savedSpeed, savedPitch, savedVolume);
+        playNextChunk(gen);
       }, 50);
     }
   };
@@ -479,19 +511,25 @@ export default function App() {
     setPitch(newPitch);
     setVolume(newVolume);
 
+    activeSpeedRef.current = newSpeed;
+    activePitchRef.current = newPitch;
+    activeVolumeRef.current = newVolume;
+
+    let targetVoiceIdx = -1;
     if (newVoiceName) {
-      const idx = voices.findIndex((v) => v.name === newVoiceName);
-      if (idx >= 0) {
-        setSelectedVoiceIdx(idx);
-      }
+      targetVoiceIdx = voices.findIndex((v) => v.name === newVoiceName);
     } else {
-      let idx = -1;
       if (presetName === "A") {
-        idx = voices.findIndex((v) => /haruka/i.test(v.name));
+        targetVoiceIdx = voices.findIndex((v) => /haruka/i.test(v.name));
       } else {
-        idx = voices.findIndex((v) => /ichiro/i.test(v.name));
+        targetVoiceIdx = voices.findIndex((v) => /ichiro/i.test(v.name));
       }
-      if (idx >= 0) setSelectedVoiceIdx(idx);
+    }
+    if (targetVoiceIdx >= 0) {
+      setSelectedVoiceIdx(targetVoiceIdx);
+      if (voices[targetVoiceIdx]) {
+        activeVoiceRef.current = voices[targetVoiceIdx];
+      }
     }
   };
 
@@ -506,6 +544,9 @@ export default function App() {
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = parseInt(e.target.value);
     setSelectedVoiceIdx(idx);
+    if (voices[idx]) {
+      activeVoiceRef.current = voices[idx];
+    }
   };
 
   // Text chunking for Web Speech API stability
@@ -556,13 +597,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [status, isPaused]);
 
-  const playNextChunk = (
-    gen: number,
-    optVoice?: SpeechSynthesisVoice,
-    optSpeed?: number,
-    optPitch?: number,
-    optVol?: number
-  ) => {
+  const playNextChunk = (gen: number) => {
     if (gen !== ttsGeneration.current) return;
     if (!speechQueue.current.length) {
       currentChunkText.current = "";
@@ -577,16 +612,17 @@ export default function App() {
 
     const utter = new SpeechSynthesisUtterance(chunk);
 
-    const selectedVoice = optVoice !== undefined ? optVoice : voices[selectedVoiceIdx];
+    // 常に最新のアクティブ設定（Ref）を参照！クロージャやState更新ラグの影響を一切受けず、最後まで確実に維持！
+    const selectedVoice = activeVoiceRef.current || voices[selectedVoiceIdx];
     if (selectedVoice) {
       utter.voice = selectedVoice;
       utter.lang = selectedVoice.lang || "ja-JP";
     } else {
       utter.lang = "ja-JP";
     }
-    utter.rate = optSpeed !== undefined ? optSpeed : speed;
-    utter.pitch = optPitch !== undefined ? optPitch : pitch;
-    utter.volume = (optVol !== undefined ? optVol : volume) / 100;
+    utter.rate = activeSpeedRef.current;
+    utter.pitch = activePitchRef.current;
+    utter.volume = activeVolumeRef.current / 100;
 
     // 単語/文字境界を記録して一時停止時の即時再開位置を追跡
     utter.onboundary = (e) => {
