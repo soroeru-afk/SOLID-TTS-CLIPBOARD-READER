@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2, PanelTop, ExternalLink, Layers, Mic, Sliders, RotateCcw } from "lucide-react";
+import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2, PanelTop, ExternalLink, Layers, Mic, Sliders, RotateCcw, History, Copy, Check } from "lucide-react";
 
 // Themes configuration
 const THEMES: Record<string, { label: string; headerColor: string }> = {
@@ -116,6 +116,17 @@ const deleteVidFromDB = (slotN: number): Promise<void> =>
       })
   );
 
+// 読上テキスト履歴の型定義 & 設定（最大10件）
+export interface SpeechHistoryItem {
+  id: string;
+  text: string;
+  timestamp: number;
+  charCount: number;
+  source: "clipboard" | "manual";
+}
+const MAX_HISTORY_ITEMS = 10;
+const HISTORY_STORAGE_KEY = "solid-tts-history-v1";
+
 export default function App() {
   // Load settings from localStorage
   const [theme, setTheme] = useState(() => {
@@ -128,8 +139,74 @@ export default function App() {
   const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem("aist-tts-font-size") || "13"));
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("aist-tts-active-tab") || "voice");
 
-  // 上にシュッと出るドロワー状態（"none" | "text" | "voice_settings"）
-  const [drawerMode, setDrawerMode] = useState<"none" | "text" | "voice_settings">("none");
+  // 読上履歴リスト（最大10件）
+  const [historyList, setHistoryList] = useState<SpeechHistoryItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(HISTORY_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed.slice(0, MAX_HISTORY_ITEMS);
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [copiedHistoryId, setCopiedHistoryId] = useState<string | null>(null);
+
+  // 履歴への自動追加（同一テキスト重複は先頭に更新、最大10件維持）
+  const addToHistory = (text: string, source: "clipboard" | "manual" = "clipboard") => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setHistoryList((prev) => {
+      const filtered = prev.filter((item) => item.text !== trimmed);
+      const newItem: SpeechHistoryItem = {
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        text: trimmed,
+        timestamp: Date.now(),
+        charCount: trimmed.length,
+        source
+      };
+      const updated = [newItem, ...filtered].slice(0, MAX_HISTORY_ITEMS);
+      try {
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const removeHistoryItem = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setHistoryList((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      try {
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const clearHistory = () => {
+    if (!confirm("読上履歴（最大10件）をすべて消去しますか？")) return;
+    setHistoryList([]);
+    try {
+      localStorage.removeItem(HISTORY_STORAGE_KEY);
+    } catch (e) {}
+  };
+
+  const handleCopyHistory = async (item: SpeechHistoryItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(item.text);
+        setCopiedHistoryId(item.id);
+        setTimeout(() => setCopiedHistoryId(null), 1500);
+      }
+    } catch (err) {
+      console.warn("Clipboard write failed", err);
+    }
+  };
+
+  // 上にシュッと出るドロワー状態（"none" | "text" | "voice_settings" | "history"）
+  const [drawerMode, setDrawerMode] = useState<"none" | "text" | "voice_settings" | "history">("none");
   const [isDrawerMaximized, setIsDrawerMaximized] = useState(false);
   const [drawerCustomHeight, setDrawerCustomHeight] = useState<number | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -1148,6 +1225,7 @@ export default function App() {
         return;
       }
       setTextToRead(text);
+      addToHistory(text, "clipboard");
       startSpeaking(text);
     } catch (e: any) {
       if (isInIframe) {
@@ -1358,7 +1436,7 @@ export default function App() {
               ? "92%"
               : drawerCustomHeight !== null
               ? `${drawerCustomHeight}%`
-              : activeTab === "voice" && drawerMode === "text"
+              : activeTab === "voice" && (drawerMode === "text" || drawerMode === "history")
               ? "62%"
               : undefined,
             maxHeight: "94%"
@@ -1394,6 +1472,12 @@ export default function App() {
                 <>
                   <Edit3 size={13} style={{ color: "var(--bg-btn-primary)" }} />
                   読み上げテキスト入力 ({textToRead.length}文字)
+                </>
+              )}
+              {activeTab === "voice" && drawerMode === "history" && (
+                <>
+                  <History size={13} style={{ color: "var(--bg-btn-primary)" }} />
+                  読上テキスト履歴 ({historyList.length}/10件)
                 </>
               )}
               {activeTab === "voice" && drawerMode === "voice_settings" && (
@@ -1441,18 +1525,32 @@ export default function App() {
                     resize: "none"
                   }}
                 />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px", flexShrink: 0 }}>
-                  <button
-                    onClick={() => setTextToRead("")}
-                    className="btn-action"
-                    disabled={!textToRead}
-                    style={{ fontSize: "10px", padding: "4px 8px" }}
-                  >
-                    クリア
-                  </button>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px", flexShrink: 0, gap: "6px" }}>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <button
+                      onClick={() => setTextToRead("")}
+                      className="btn-action"
+                      disabled={!textToRead}
+                      style={{ fontSize: "10px", padding: "4px 8px" }}
+                    >
+                      クリア
+                    </button>
+                    {historyList.length > 0 && (
+                      <button
+                        onClick={() => setDrawerMode("history")}
+                        className="btn-action"
+                        style={{ fontSize: "10px", padding: "4px 8px" }}
+                        title="過去10件の読上履歴からテキストを選ぶ"
+                      >
+                        <History size={10} style={{ display: "inline", verticalAlign: "middle", marginRight: "3px" }} />
+                        履歴から呼出 ({historyList.length})
+                      </button>
+                    )}
+                  </div>
                   <button
                     onClick={() => {
                       if (textToRead.trim()) {
+                        addToHistory(textToRead, "manual");
                         startSpeaking(textToRead);
                         closeDrawer();
                       }
@@ -1471,6 +1569,116 @@ export default function App() {
                     閉じて再生
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* 2. 読上履歴ドロワー（最大10件） */}
+            {activeTab === "voice" && drawerMode === "history" && (
+              <div className="history-drawer-wrapper">
+                <div className="history-toolbar">
+                  <div className="history-toolbar-info">
+                    <span className="history-tag">BUFFER 10</span>
+                    <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                      直近のクリップボード・入力読上履歴
+                    </span>
+                  </div>
+                  {historyList.length > 0 && (
+                    <button
+                      onClick={clearHistory}
+                      className="history-clear-all-btn"
+                      title="保存されている履歴をすべて消去します"
+                    >
+                      <Trash2 size={11} />
+                      <span>全消去</span>
+                    </button>
+                  )}
+                </div>
+
+                {historyList.length === 0 ? (
+                  <div className="history-empty-box">
+                    <History size={28} style={{ opacity: 0.3, marginBottom: "4px" }} />
+                    <div style={{ fontWeight: 600, fontSize: "12px" }}>読上履歴がありません</div>
+                    <div style={{ fontSize: "10.5px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                      クリップボード読み上げを実行すると、ここに直近10件が自動保持されます。
+                    </div>
+                  </div>
+                ) : (
+                  <div className="history-items-list">
+                    {historyList.map((item, index) => {
+                      const dateObj = new Date(item.timestamp);
+                      const timeStr = dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                      const dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+                      return (
+                        <div key={item.id} className="history-entry-card">
+                          <div className="history-entry-top">
+                            <div className="history-entry-badges">
+                              <span className="history-entry-num">#{index + 1}</span>
+                              <span className="history-entry-type">
+                                {item.source === "clipboard" ? "CLIPBOARD" : "MANUAL"}
+                              </span>
+                              <span className="history-entry-chars">{item.charCount}文字</span>
+                              <span className="history-entry-time">{dateStr} {timeStr}</span>
+                            </div>
+
+                            <div className="history-entry-actions">
+                              <button
+                                onClick={(e) => handleCopyHistory(item, e)}
+                                className="history-icon-btn"
+                                title="クリップボードにコピー"
+                              >
+                                {copiedHistoryId === item.id ? <Check size={11} style={{ color: "var(--bg-btn-primary)" }} /> : <Copy size={11} />}
+                                <span>{copiedHistoryId === item.id ? "済" : "コピー"}</span>
+                              </button>
+                              <button
+                                onClick={(e) => removeHistoryItem(item.id, e)}
+                                className="history-icon-btn delete-btn"
+                                title="この項目を履歴から削除"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div
+                            className="history-entry-content"
+                            title="クリックでテキスト入力欄に読み込み"
+                            onClick={() => {
+                              setTextToRead(item.text);
+                            }}
+                          >
+                            {item.text}
+                          </div>
+
+                          <div className="history-entry-bottom">
+                            <button
+                              onClick={() => {
+                                setTextToRead(item.text);
+                                closeDrawer();
+                              }}
+                              className="history-btn-load"
+                              title="テキスト欄にセットして閉じる"
+                            >
+                              <Edit3 size={11} />
+                              <span>入力欄にセット</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setTextToRead(item.text);
+                                addToHistory(item.text, item.source);
+                                startSpeaking(item.text);
+                              }}
+                              className="history-btn-replay"
+                              title="このテキストをもう一度読み上げ"
+                            >
+                              <Play size={11} />
+                              <span>もう一度読む</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1922,7 +2130,12 @@ export default function App() {
         {/* アクションボタングループ（再生・一時停止・全停止） */}
         <div className="actions-strip" style={{ margin: "1px 0" }}>
           <button
-            onClick={() => startSpeaking(textToRead)}
+            onClick={() => {
+              if (textToRead.trim()) {
+                addToHistory(textToRead, "manual");
+                startSpeaking(textToRead);
+              }
+            }}
             disabled={!textToRead.trim()}
             className="btn-action"
             title={!textToRead.trim() ? "テキストを入力または貼り付けてください" : "再生"}
@@ -1948,7 +2161,7 @@ export default function App() {
           </button>
         </div>
 
-        {/* 上にシュッと開くトグルボタン列（テキスト入力 ＆ ボイス・話速詳細） */}
+        {/* 上にシュッと開くトグルボタン列（テキスト入力 ＆ 読上履歴 ＆ ボイス・話速詳細） */}
         <div className="drawer-trigger-row">
           <button
             onClick={() => {
@@ -1964,13 +2177,28 @@ export default function App() {
           <button
             onClick={() => {
               if (activeTab !== "voice") setActiveTab("voice");
+              setDrawerMode(drawerMode === "history" ? "none" : "history");
+            }}
+            className={`drawer-trigger-btn ${activeTab === "voice" && drawerMode === "history" ? "active" : ""}`}
+            title="直近10件の読上履歴リストを表示"
+          >
+            <History size={11} />
+            <span>
+              {activeTab === "voice" && drawerMode === "history"
+                ? "履歴を閉じる"
+                : `読上履歴 (${historyList.length})`}
+            </span>
+          </button>
+          <button
+            onClick={() => {
+              if (activeTab !== "voice") setActiveTab("voice");
               setDrawerMode(drawerMode === "voice_settings" ? "none" : "voice_settings");
             }}
             className={`drawer-trigger-btn ${activeTab === "voice" && drawerMode === "voice_settings" ? "active" : ""}`}
             title="ボイス・話速の詳細設定の表示切替"
           >
             <Settings size={11} />
-            <span>{activeTab === "voice" && drawerMode === "voice_settings" ? "設定を閉じる" : "ボイス・話速詳細"}</span>
+            <span>{activeTab === "voice" && drawerMode === "voice_settings" ? "設定を閉じる" : "ボイス詳細"}</span>
           </button>
         </div>
       </div>

@@ -855,8 +855,8 @@ input[type="range"]::-moz-range-thumb {
 /* ドロワーを上に展開するためのトグルボタングループ */
 .drawer-trigger-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 5px;
   margin-top: 2px;
 }
 
@@ -864,9 +864,9 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 6px 8px;
-  font-size: calc(var(--font-size-current) * 0.92);
+  gap: 4px;
+  padding: 6px 4px;
+  font-size: calc(var(--font-size-current) * 0.88);
   border-radius: 4px;
   border: 1px dashed var(--border-btn-secondary);
   background-color: var(--bg-btn-secondary);
@@ -874,6 +874,9 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
   transition: all 0.15s ease;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .drawer-trigger-btn:hover {
@@ -887,4 +890,246 @@ input[type="range"]::-moz-range-thumb {
   border-style: solid;
   border-color: transparent;
   font-weight: 700;
+}
+
+/* 読上履歴ドロワー用インダストリアル・スタイル */
+.history-drawer-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.history-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.history-toolbar-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-tag {
+  font-family: monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: var(--bg-header);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-app);
+  letter-spacing: 0.5px;
+}
+
+.history-clear-all-btn {
+  background: transparent;
+  border: 1px solid var(--border-btn-secondary);
+  color: var(--text-secondary);
+  border-radius: 3px;
+  padding: 2px 7px;
+  font-size: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.history-clear-all-btn:hover {
+  border-color: #ff5555;
+  color: #ff6666;
+  background-color: rgba(255, 85, 85, 0.08);
+}
+
+.history-empty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 12px;
+  text-align: center;
+  background-color: var(--bg-input);
+  border: 1px dashed var(--border-input);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.history-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 2px;
+  flex: 1;
+}
+
+.history-entry-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.history-entry-card:hover {
+  border-color: var(--text-secondary);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.history-entry-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-entry-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.history-entry-num {
+  font-family: monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--bg-btn-primary);
+}
+
+.history-entry-type {
+  font-family: monospace;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: var(--bg-btn-secondary);
+  color: var(--text-btn-secondary);
+  border: 1px solid var(--border-btn-secondary);
+  letter-spacing: 0.5px;
+}
+
+.history-entry-chars {
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.history-entry-time {
+  font-family: monospace;
+  font-size: 9.5px;
+  color: var(--text-secondary);
+  opacity: 0.85;
+}
+
+.history-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.history-icon-btn {
+  background: var(--bg-btn-secondary);
+  border: 1px solid var(--border-btn-secondary);
+  color: var(--text-btn-secondary);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.15s ease;
+}
+
+.history-icon-btn:hover {
+  background-color: var(--bg-btn-primary);
+  color: var(--text-btn-primary);
+  border-color: transparent;
+}
+
+.history-icon-btn.delete-btn:hover {
+  background-color: #ff5555;
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.history-entry-content {
+  font-size: calc(var(--font-size-current) * 0.95);
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 4.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  cursor: pointer;
+  padding: 3px 0;
+}
+
+.history-entry-content:hover {
+  color: var(--bg-btn-primary);
+}
+
+.history-entry-bottom {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border-app);
+}
+
+.history-btn-load {
+  background: var(--bg-btn-secondary);
+  border: 1px solid var(--border-btn-secondary);
+  color: var(--text-btn-secondary);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.history-btn-load:hover {
+  background: var(--bg-btn-primary);
+  color: var(--text-btn-primary);
+  border-color: transparent;
+}
+
+.history-btn-replay {
+  background: var(--bg-btn-primary);
+  border: 1px solid transparent;
+  color: var(--text-btn-primary);
+  border-radius: 3px;
+  padding: 3px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 0.15s ease;
+}
+
+.history-btn-replay:hover {
+  opacity: 0.9;
 }
