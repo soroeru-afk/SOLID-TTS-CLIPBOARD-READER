@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2, PanelTop, ExternalLink, Layers, Mic, Sliders } from "lucide-react";
+import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2, PanelTop, ExternalLink, Layers, Mic, Sliders, RotateCcw } from "lucide-react";
 
 // Themes configuration
 const THEMES: Record<string, { label: string; headerColor: string }> = {
@@ -27,6 +27,47 @@ const MIN_WINDOW_SIZES: Record<"video" | "mini", { width: number; height: number
   video: { width: 300, height: 500 },
   mini: { width: 300, height: 350 }
 };
+
+// ボイス推奨初期値（カオルさま添付画像の各パラメータに完全準拠）
+export interface VoiceDefaultConfig {
+  speed: number;
+  pitch: number;
+  volume: number;
+}
+
+export const VOICE_DEFAULT_PRESETS: { pattern: RegExp; config: VoiceDefaultConfig }[] = [
+  // 1. Microsoft Ichiro (スロット1標準) -> 話速: 2.0x, ピッチ: 1.0x, 音量: 100%
+  { pattern: /ichiro/i, config: { speed: 2.0, pitch: 1.0, volume: 100 } },
+  // 2. Microsoft Haruka (スロット2標準) -> 話速: 1.9x, ピッチ: 1.1x, 音量: 85%
+  { pattern: /haruka/i, config: { speed: 1.9, pitch: 1.1, volume: 85 } },
+  // 3. Microsoft Sayaka -> 話速: 1.9x, ピッチ: 1.1x, 音量: 85%
+  { pattern: /sayaka/i, config: { speed: 1.9, pitch: 1.1, volume: 85 } },
+  // 4. Microsoft Ayumi -> 話速: 2.3x, ピッチ: 1.4x, 音量: 85%
+  { pattern: /ayumi/i, config: { speed: 2.3, pitch: 1.4, volume: 85 } },
+  // 5. Google 日本語 -> 話速: 1.2x, ピッチ: 1.1x, 音量: 85%
+  { pattern: /google.*(ja|jp|日本)/i, config: { speed: 1.2, pitch: 1.1, volume: 85 } },
+  { pattern: /google/i, config: { speed: 1.2, pitch: 1.1, volume: 85 } }
+];
+
+export const getDefaultConfigForVoice = (voiceName: string): VoiceDefaultConfig => {
+  if (!voiceName) return { speed: 1.2, pitch: 1.0, volume: 85 };
+  for (const item of VOICE_DEFAULT_PRESETS) {
+    if (item.pattern.test(voiceName)) {
+      return item.config;
+    }
+  }
+  return { speed: 1.2, pitch: 1.0, volume: 85 };
+};
+
+// スロット別デフォルト推奨設定（未保存時のフォールバック）
+export const DEFAULT_SLOT_CONFIGS: { voicePattern: RegExp; config: VoiceDefaultConfig }[] = [
+  // スロット 1 (idx 0): Microsoft Ichiro (2.0x / 1.0x / 100%)
+  { voicePattern: /ichiro/i, config: { speed: 2.0, pitch: 1.0, volume: 100 } },
+  // スロット 2 (idx 1): Microsoft Haruka (1.9x / 1.1x / 85%)
+  { voicePattern: /haruka/i, config: { speed: 1.9, pitch: 1.1, volume: 85 } },
+  // スロット 3 (idx 2): Microsoft Sayaka / Ayumi / Google (1.9x / 1.1x / 85%)
+  { voicePattern: /sayaka|ayumi|google/i, config: { speed: 1.9, pitch: 1.1, volume: 85 } }
+];
 
 // IndexedDB for Avatar Videos (3 Slots)
 const TTS_VID_DB_NAME = "solidTtsVideoDB";
@@ -204,22 +245,42 @@ export default function App() {
     setTempPresetLabel(currentPreset === "A" ? presetALabel : presetBLabel);
   }, [currentPreset, presetALabel, presetBLabel]);
 
-  // Temporary local state for sliders that syncs with current preset
+  // Temporary local state for sliders that syncs with current slot and preset
   const [speed, setSpeed] = useState(() => {
+    const curSlot = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
+    const slotIdx = isNaN(curSlot) || curSlot < 0 || curSlot >= VID_SLOT_COUNT ? 0 : curSlot;
+    const slotSaved = localStorage.getItem(`solid-tts-slot-${slotIdx}-speed`);
+    if (slotSaved) return parseFloat(slotSaved);
     const active = localStorage.getItem("aist-tts-preset-active") || "A";
     const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
-    return parseFloat(localStorage.getItem(prefix + "speed") || "1.2");
+    const oldSaved = localStorage.getItem(prefix + "speed");
+    if (oldSaved) return parseFloat(oldSaved);
+    return DEFAULT_SLOT_CONFIGS[slotIdx]?.config.speed ?? 1.2;
   });
   const [pitch, setPitch] = useState(() => {
+    const curSlot = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
+    const slotIdx = isNaN(curSlot) || curSlot < 0 || curSlot >= VID_SLOT_COUNT ? 0 : curSlot;
+    const slotSaved = localStorage.getItem(`solid-tts-slot-${slotIdx}-pitch`);
+    if (slotSaved) return parseFloat(slotSaved);
     const active = localStorage.getItem("aist-tts-preset-active") || "A";
     const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
-    return parseFloat(localStorage.getItem(prefix + "pitch") || "1.0");
+    const oldSaved = localStorage.getItem(prefix + "pitch");
+    if (oldSaved) return parseFloat(oldSaved);
+    return DEFAULT_SLOT_CONFIGS[slotIdx]?.config.pitch ?? 1.0;
   });
   const [volume, setVolume] = useState(() => {
+    const curSlot = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
+    const slotIdx = isNaN(curSlot) || curSlot < 0 || curSlot >= VID_SLOT_COUNT ? 0 : curSlot;
+    const slotSaved = localStorage.getItem(`solid-tts-slot-${slotIdx}-volume`);
+    if (slotSaved) return parseInt(slotSaved);
     const active = localStorage.getItem("aist-tts-preset-active") || "A";
     const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
-    return parseInt(localStorage.getItem(prefix + "volume") || "80");
+    const oldSaved = localStorage.getItem(prefix + "volume");
+    if (oldSaved) return parseInt(oldSaved);
+    return DEFAULT_SLOT_CONFIGS[slotIdx]?.config.volume ?? 85;
   });
+
+  const [resetFeedbackMsg, setResetFeedbackMsg] = useState<string | null>(null);
 
   const [status, setStatus] = useState("待機中");
   const [isPaused, setIsPaused] = useState(false);
@@ -490,18 +551,9 @@ export default function App() {
     const slotTheme = localStorage.getItem(`solid-tts-slot-${idx}-theme`) || (idx === 1 ? "ocean" : idx === 2 ? "brown" : "dark");
     setTheme(slotTheme);
 
-    // 3. 音声設定の復元
-    const savedPreset = localStorage.getItem(`solid-tts-slot-${idx}-preset`) || (idx === 1 ? "A" : "B");
-    setCurrentPreset(savedPreset);
-
-    const savedSpeed = parseFloat(localStorage.getItem(`solid-tts-slot-${idx}-speed`) || (idx === 0 ? "1.25" : idx === 1 ? "1.2" : "1.15"));
-    const savedPitch = parseFloat(localStorage.getItem(`solid-tts-slot-${idx}-pitch`) || (idx === 0 ? "0.95" : idx === 1 ? "1.1" : "1.0"));
-    const savedVolume = parseInt(localStorage.getItem(`solid-tts-slot-${idx}-volume`) || "80");
+    // 3. 音声設定の復元（スロット専用ボイス・話速・ピッチ・音量）
+    const slotDef = DEFAULT_SLOT_CONFIGS[idx]?.config || { speed: 2.0, pitch: 1.0, volume: 100 };
     const savedVoice = localStorage.getItem(`solid-tts-slot-${idx}-voice`);
-
-    setSpeed(savedSpeed);
-    setPitch(savedPitch);
-    setVolume(savedVolume);
 
     let nextVoice: SpeechSynthesisVoice | undefined;
     if (savedVoice && voices.length > 0) {
@@ -511,25 +563,39 @@ export default function App() {
         nextVoice = voices[vIdx];
       }
     } else if (voices.length > 0) {
+      const pattern = DEFAULT_SLOT_CONFIGS[idx]?.voicePattern;
       let vIdx = -1;
-      if (savedPreset === "A") {
-        vIdx = voices.findIndex((v) => /haruka/i.test(v.name));
-      } else {
-        vIdx = voices.findIndex((v) => /ichiro/i.test(v.name));
+      if (pattern) {
+        vIdx = voices.findIndex((v) => pattern.test(v.name));
       }
-      if (vIdx >= 0) {
-        setSelectedVoiceIdx(vIdx);
-        nextVoice = voices[vIdx];
+      if (vIdx < 0) {
+        vIdx = idx === 0 ? voices.findIndex((v) => /ichiro/i.test(v.name)) : voices.findIndex((v) => /haruka/i.test(v.name));
       }
+      if (vIdx < 0) vIdx = 0;
+      setSelectedVoiceIdx(vIdx);
+      nextVoice = voices[vIdx];
     }
+
+    const savedSpeedStr = localStorage.getItem(`solid-tts-slot-${idx}-speed`);
+    const savedPitchStr = localStorage.getItem(`solid-tts-slot-${idx}-pitch`);
+    const savedVolumeStr = localStorage.getItem(`solid-tts-slot-${idx}-volume`);
+
+    const voiceDef = nextVoice ? getDefaultConfigForVoice(nextVoice.name) : slotDef;
+    const finalSpeed = savedSpeedStr ? parseFloat(savedSpeedStr) : voiceDef.speed;
+    const finalPitch = savedPitchStr ? parseFloat(savedPitchStr) : voiceDef.pitch;
+    const finalVolume = savedVolumeStr ? parseInt(savedVolumeStr) : voiceDef.volume;
+
+    setSpeed(finalSpeed);
+    setPitch(finalPitch);
+    setVolume(finalVolume);
 
     // 発声設定Refを即時同期（ワンフレーズ目だけでなく最後のチャンクまで100%この声を維持）
     if (nextVoice) {
       activeVoiceRef.current = nextVoice;
     }
-    activeSpeedRef.current = savedSpeed;
-    activePitchRef.current = savedPitch;
-    activeVolumeRef.current = savedVolume;
+    activeSpeedRef.current = finalSpeed;
+    activePitchRef.current = finalPitch;
+    activeVolumeRef.current = finalVolume;
 
     // 3. 動画のロード
     await loadSlotVideo(idx);
@@ -721,12 +787,22 @@ export default function App() {
       if (!jaVoices.length) jaVoices = all;
       setVoices(jaVoices);
 
-      const active = localStorage.getItem("aist-tts-preset-active") || "A";
-      const prefix = `aist-tts-preset-${active.toLowerCase()}-`;
-      const savedName = localStorage.getItem(prefix + "voice") || "";
-      let idx = jaVoices.findIndex((v) => v.name === savedName);
+      const curSlot = parseInt(localStorage.getItem("solid-tts-vid-slot") || "0");
+      const slotIdx = isNaN(curSlot) || curSlot < 0 || curSlot >= VID_SLOT_COUNT ? 0 : curSlot;
+      const savedSlotVoice = localStorage.getItem(`solid-tts-slot-${slotIdx}-voice`);
+      let idx = -1;
 
-      if (idx < 0 && !savedName) {
+      if (savedSlotVoice) {
+        idx = jaVoices.findIndex((v) => v.name === savedSlotVoice);
+      }
+      if (idx < 0) {
+        const pattern = DEFAULT_SLOT_CONFIGS[slotIdx]?.voicePattern;
+        if (pattern) {
+          idx = jaVoices.findIndex((v) => pattern.test(v.name));
+        }
+      }
+      if (idx < 0) {
+        const active = localStorage.getItem("aist-tts-preset-active") || "A";
         if (active === "A") {
           idx = jaVoices.findIndex((v) => /haruka/i.test(v.name));
         } else {
@@ -735,6 +811,9 @@ export default function App() {
       }
       if (idx < 0) idx = 0;
       setSelectedVoiceIdx(idx);
+      if (jaVoices[idx]) {
+        activeVoiceRef.current = jaVoices[idx];
+      }
     };
 
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -808,9 +887,44 @@ export default function App() {
   const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = parseInt(e.target.value);
     setSelectedVoiceIdx(idx);
-    if (voices[idx]) {
-      activeVoiceRef.current = voices[idx];
+    const v = voices[idx];
+    if (v) {
+      activeVoiceRef.current = v;
+      // カオルさまご指定の初期値（画像の数字）を自動適用してスロットに保存
+      const def = getDefaultConfigForVoice(v.name);
+      setSpeed(def.speed);
+      setPitch(def.pitch);
+      setVolume(def.volume);
+      activeSpeedRef.current = def.speed;
+      activePitchRef.current = def.pitch;
+      activeVolumeRef.current = def.volume;
+
+      localStorage.setItem(`solid-tts-slot-${vidSlot}-voice`, v.name);
+      localStorage.setItem(`solid-tts-slot-${vidSlot}-speed`, String(def.speed));
+      localStorage.setItem(`solid-tts-slot-${vidSlot}-pitch`, String(def.pitch));
+      localStorage.setItem(`solid-tts-slot-${vidSlot}-volume`, String(def.volume));
     }
+  };
+
+  // 選択中ボイスの初期値にリセット
+  const handleResetToVoiceDefaults = () => {
+    const curVoice = voices[selectedVoiceIdx];
+    const def = curVoice ? getDefaultConfigForVoice(curVoice.name) : { speed: 1.2, pitch: 1.0, volume: 85 };
+    setSpeed(def.speed);
+    setPitch(def.pitch);
+    setVolume(def.volume);
+    activeSpeedRef.current = def.speed;
+    activePitchRef.current = def.pitch;
+    activeVolumeRef.current = def.volume;
+
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-speed`, String(def.speed));
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-pitch`, String(def.pitch));
+    localStorage.setItem(`solid-tts-slot-${vidSlot}-volume`, String(def.volume));
+
+    setResetFeedbackMsg("初期値にリセットしました");
+    setTimeout(() => {
+      setResetFeedbackMsg(null);
+    }, 2000);
   };
 
   // Text chunking for Web Speech API stability
@@ -1427,6 +1541,46 @@ export default function App() {
                     onChange={(e) => setVolume(parseInt(e.target.value))}
                   />
                 </div>
+
+                {/* Reset to voice defaults */}
+                {(() => {
+                  const curVoice = voices[selectedVoiceIdx];
+                  const curDef = curVoice ? getDefaultConfigForVoice(curVoice.name) : { speed: 1.2, pitch: 1.0, volume: 85 };
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "4px", padding: "6px 8px", background: "var(--bg-input)", border: "1px solid var(--border-input)", borderRadius: "4px", flexWrap: "wrap" }}>
+                      <button
+                        onClick={handleResetToVoiceDefaults}
+                        className="btn-action"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          padding: "4px 9px",
+                          fontSize: "11px",
+                          background: "var(--bg-btn-secondary)",
+                          color: "var(--text-btn-secondary)",
+                          border: "1px solid var(--border-btn-secondary)",
+                          borderRadius: "3px",
+                          cursor: "pointer",
+                          fontWeight: 500
+                        }}
+                        title="このボイスの初期値（話速・ピッチ・音量）に戻す"
+                      >
+                        <RotateCcw size={11} />
+                        <span>初期値にリセット</span>
+                      </button>
+                      <div style={{ fontSize: "10px", color: "var(--text-secondary)", fontFamily: "monospace" }}>
+                        {resetFeedbackMsg ? (
+                          <span style={{ color: "var(--text-primary)", fontWeight: "bold" }}>{resetFeedbackMsg}</span>
+                        ) : (
+                          <span>
+                            初期値: {curDef.speed.toFixed(1)}x / {curDef.pitch.toFixed(1)}x / {curDef.volume}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Info Box */}
                 <div className="info-alert" style={{ marginTop: "6px" }}>
