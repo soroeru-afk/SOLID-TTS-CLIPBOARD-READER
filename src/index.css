@@ -187,20 +187,22 @@ body {
 /* Application Layout Classes */
 .app-card {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
   border: none;
   background-color: var(--bg-panel);
   box-shadow: none;
-  overflow-y: auto;
+  overflow: hidden;
   box-sizing: border-box;
   font-size: var(--font-size-current);
 }
 
 .app-card.mode-mini {
-  min-height: 0;
-  height: auto;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
 }
 
 .app-card.mode-slim {
@@ -344,9 +346,23 @@ body {
   font-size: calc(var(--font-size-current) * 1.05);
   line-height: 1.6;
   outline: none;
-  resize: vertical;
   box-sizing: border-box;
   transition: border-color 0.2s;
+}
+
+.slide-up-drawer-body .text-area-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+}
+
+.slide-up-drawer-body .textarea-field {
+  flex: 1;
+  height: 100%;
+  min-height: 110px;
+  resize: none;
 }
 
 .textarea-field:focus {
@@ -554,33 +570,41 @@ input[type="range"]::-moz-range-thumb {
 
 /* Avatar Video Styles */
 .avatar-video-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
   width: 100%;
+  height: 100%;
   background-color: #000000;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   overflow: hidden;
-  border-bottom: 1px solid var(--border-app);
-  flex-shrink: 0;
-  position: relative;
-  transition: max-height 0.25s ease;
+  z-index: 5;
 }
 
 .avatar-video-element {
   width: 100%;
+  height: 100%;
   display: block;
   object-fit: contain;
 }
 
 .avatar-video-element.normal {
   height: 100%;
+  max-height: 340px;
   object-fit: contain;
+  object-position: top center;
 }
 
 .avatar-video-element.expanded {
-  height: auto;
-  max-height: none;
-  object-fit: contain;
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  object-position: top center;
 }
 
 .avatar-size-bar {
@@ -663,4 +687,204 @@ input[type="range"]::-moz-range-thumb {
 .btn-icon-subtle:hover {
   color: var(--text-primary);
   border-color: var(--text-secondary);
+}
+
+/* =============================================
+   上にシュッと出るスライドアップ・ドロワー＆常時固定ボトムバー
+   ============================================= */
+
+/* アバターステージ全体（上部ヘッダーと下部固定バーの間の全領域） */
+.avatar-stage-container {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #000000;
+  border-bottom: 1px solid var(--border-app);
+}
+
+.avatar-stage-container.white-bg {
+  background-color: #ffffff;
+}
+
+/* 上にシュッと出るスライドアップ・ドロワー */
+.slide-up-drawer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 94%;
+  background-color: var(--bg-panel);
+  border-top: 1px solid var(--border-app);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.65);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.22s ease-out, opacity 0.2s ease-out;
+}
+
+.slide-up-drawer.open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 上部ドラッグリサイズ用グリップバー（上にエリアを広げる） */
+.slide-up-drawer-resizer {
+  height: 10px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  background-color: var(--bg-header);
+  border-top: 1px solid var(--border-app);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.resizer-handle-pill {
+  width: 32px;
+  height: 3px;
+  background-color: var(--text-secondary);
+  opacity: 0.4;
+  border-radius: 2px;
+  transition: opacity 0.15s, background-color 0.15s;
+}
+
+.slide-up-drawer-resizer:hover .resizer-handle-pill {
+  opacity: 0.9;
+  background-color: var(--bg-btn-primary);
+}
+
+/* ドロワーのヘッダーバー */
+.slide-up-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background-color: var(--bg-header);
+  border-bottom: 1px solid var(--border-app);
+  font-size: calc(var(--font-size-current) * 0.92);
+  font-weight: 700;
+  color: var(--text-header);
+  flex-shrink: 0;
+}
+
+.slide-up-drawer-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.02em;
+}
+
+.slide-up-drawer-btn {
+  background: var(--bg-btn-secondary);
+  border: 1px solid var(--border-btn-secondary);
+  color: var(--text-btn-secondary);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+
+.slide-up-drawer-btn:hover {
+  background-color: var(--bg-btn-primary);
+  color: var(--text-btn-primary);
+  border-color: transparent;
+}
+
+.slide-up-drawer-close {
+  background: var(--bg-btn-secondary);
+  border: 1px solid var(--border-btn-secondary);
+  color: var(--text-btn-secondary);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+
+.slide-up-drawer-close:hover {
+  background-color: var(--bg-btn-primary);
+  color: var(--text-btn-primary);
+  border-color: transparent;
+}
+
+/* ドロワーのスクロール可能内部コンテンツ */
+.slide-up-drawer-body {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+/* 常に画面最下部に固定されるボトムバー */
+.pinned-bottom-bar {
+  flex-shrink: 0;
+  background-color: var(--bg-panel);
+  border-top: 1px solid var(--border-app);
+  padding: 8px 10px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 50;
+  box-sizing: border-box;
+}
+
+/* ドロワーを上に展開するためのトグルボタングループ */
+.drawer-trigger-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.drawer-trigger-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  font-size: calc(var(--font-size-current) * 0.92);
+  border-radius: 4px;
+  border: 1px dashed var(--border-btn-secondary);
+  background-color: var(--bg-btn-secondary);
+  color: var(--text-btn-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+
+.drawer-trigger-btn:hover {
+  border-color: var(--bg-btn-primary);
+  color: var(--text-primary);
+}
+
+.drawer-trigger-btn.active {
+  background-color: var(--bg-btn-primary);
+  color: var(--text-btn-primary);
+  border-style: solid;
+  border-color: transparent;
+  font-weight: 700;
 }

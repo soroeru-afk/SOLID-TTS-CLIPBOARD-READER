@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "SOLID TTS CLIPBOARD READER",
+  "short_name": "SOLID TTS",
+  "description": "A standalone TTS reader for copied clipboard texts and manual inputs with voice presets, industrial themes, and avatar video support.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    {
+      "src": "pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
