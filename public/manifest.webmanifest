@@ -1,5 +1,5 @@
 {
-  "id": "./",
+  "id": "solid-tts-clipboard-reader-app",
   "name": "SOLID TTS CLIPBOARD READER",
   "short_name": "SOLID TTS",
   "description": "A standalone TTS reader for copied clipboard texts and manual inputs with voice presets, industrial themes, and avatar video support.",
