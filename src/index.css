@@ -26,6 +26,10 @@
   --text-tab-active: #1e1e2e;
   --bg-tab-inactive: #14141e;
   --text-tab-inactive: #a6adc8;
+  --border-tab-active: transparent;
+  --bg-toggle-active: var(--bg-btn-primary);
+  --text-toggle-active: var(--text-btn-primary);
+  --border-toggle-active: var(--bg-btn-primary);
   
   --font-family-current: 'Courier New', Consolas, monospace;
   --font-size-current: 11px;
@@ -86,30 +90,61 @@
 }
 
 [data-theme="brown"] {
-  --bg-app: #21130a;
-  --bg-panel: #331e11;
-  --bg-header: #4c2c19;
-  --text-header: #f5deb3;
-  --border-app: #663d21;
-  --text-primary: #f5deb3;
-  --text-secondary: #d4a574;
-  --bg-input: #422716;
-  --border-input: #663d21;
-  --bg-btn-primary: #c8843a;
+  --bg-app: #2c221b;
+  --bg-panel: #F7ECE1;
+  --bg-header: #59483a;
+  --text-header: #f8ede2;
+  --border-app: #d4c2b2;
+  --text-primary: #35281e;
+  --text-secondary: #6e5a4e;
+  --bg-input: #ffffff;
+  --border-input: #c9b5a3;
+  --bg-btn-primary: #8c6853;
   --text-btn-primary: #ffffff;
-  --bg-btn-secondary: #422716;
-  --text-btn-secondary: #f5deb3;
-  --border-btn-secondary: #663d21;
-  --bg-btn-stop: #a0522d;
+  --bg-btn-secondary: #ede0d2;
+  --text-btn-secondary: #35281e;
+  --border-btn-secondary: #cbb8a6;
+  --bg-btn-stop: #1e1611;
   --text-btn-stop: #ffffff;
-  --border-btn-stop: transparent;
-  --bg-tab-active: #c8843a;
+  --border-btn-stop: #8c6853;
+  --bg-tab-active: #8c6853;
   --text-tab-active: #ffffff;
-  --bg-tab-inactive: #422716;
-  --text-tab-inactive: #d4a574;
-  --shadow-app: 0 8px 25px rgba(0, 0, 0, 0.6);
-  --bg-info: #422716;
-  --border-info: #663d21;
+  --bg-tab-inactive: #ede0d2;
+  --text-tab-inactive: #6e5a4e;
+  --shadow-app: 0 6px 20px rgba(53, 40, 30, 0.15);
+  --bg-info: #efe3d5;
+  --border-info: #d4c2b2;
+}
+
+[data-theme="paper"] {
+  --bg-app: #ebe4d5;
+  --bg-panel: #f7f4ed;
+  --bg-header: #e2dbcc;
+  --text-header: #2b2723;
+  --border-app: #d6cec0;
+  --text-primary: #2b2723;
+  --text-secondary: #787067;
+  --bg-input: #ffffff;
+  --border-input: #d6cec0;
+  --bg-btn-primary: #d95430;
+  --text-btn-primary: #ffffff;
+  --bg-btn-secondary: #ffffff;
+  --text-btn-secondary: #2b2723;
+  --border-btn-secondary: #d6cec0;
+  --bg-btn-stop: #2b2723;
+  --text-btn-stop: #ffffff;
+  --border-btn-stop: #d95430;
+  --bg-tab-active: #ffffff;
+  --text-tab-active: #2b2723;
+  --border-tab-active: #2b2723;
+  --bg-tab-inactive: #ede7dc;
+  --text-tab-inactive: #787067;
+  --bg-toggle-active: #ffffff;
+  --text-toggle-active: #2b2723;
+  --border-toggle-active: #2b2723;
+  --shadow-app: 0 4px 18px rgba(70, 60, 50, 0.12);
+  --bg-info: #ffffff;
+  --border-info: #d6cec0;
 }
 
 [data-theme="ocean"] {

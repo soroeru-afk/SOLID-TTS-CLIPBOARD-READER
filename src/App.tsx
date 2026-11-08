@@ -6,7 +6,8 @@ const THEMES: Record<string, { label: string; headerColor: string }> = {
   light: { label: "ライト", headerColor: "#f1f3f4" },
   dark: { label: "ダーク", headerColor: "#1b1b2a" },
   pastel: { label: "モノトーン", headerColor: "#111111" },
-  brown: { label: "ブラウン", headerColor: "#4c2c19" },
+  brown: { label: "ブラウン", headerColor: "#59483a" },
+  paper: { label: "ペーパー", headerColor: "#e2dbcc" },
   ocean: { label: "パステルピンク", headerColor: "#B07A76" }
 };
 
@@ -1976,10 +1977,11 @@ export default function App() {
                         alignItems: "center",
                         justifyContent: "center",
                         gap: "6px",
-                        background: vidBgColor === "black" ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-                        color: vidBgColor === "black" ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
-                        borderColor: vidBgColor === "black" ? "transparent" : "var(--border-btn-secondary)",
-                        outline: vidBgColor === "black" ? "2px solid var(--bg-btn-primary)" : "none",
+                        background: vidBgColor === "black" ? "var(--bg-toggle-active)" : "var(--bg-btn-secondary)",
+                        color: vidBgColor === "black" ? "var(--text-toggle-active)" : "var(--text-btn-secondary)",
+                        borderColor: vidBgColor === "black" ? "var(--border-toggle-active)" : "var(--border-btn-secondary)",
+                        borderWidth: "1px",
+                        borderStyle: "solid",
                         borderRadius: "4px",
                         fontWeight: vidBgColor === "black" ? "bold" : "normal"
                       }}
@@ -1996,10 +1998,11 @@ export default function App() {
                         alignItems: "center",
                         justifyContent: "center",
                         gap: "6px",
-                        background: vidBgColor === "white" ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-                        color: vidBgColor === "white" ? "var(--text-btn-primary)" : "var(--text-btn-secondary)",
-                        borderColor: vidBgColor === "white" ? "transparent" : "var(--border-btn-secondary)",
-                        outline: vidBgColor === "white" ? "2px solid var(--bg-btn-primary)" : "none",
+                        background: vidBgColor === "white" ? "var(--bg-toggle-active)" : "var(--bg-btn-secondary)",
+                        color: vidBgColor === "white" ? "var(--text-toggle-active)" : "var(--text-btn-secondary)",
+                        borderColor: vidBgColor === "white" ? "var(--border-toggle-active)" : "var(--border-btn-secondary)",
+                        borderWidth: "1px",
+                        borderStyle: "solid",
                         borderRadius: "4px",
                         fontWeight: vidBgColor === "white" ? "bold" : "normal"
                       }}
@@ -2074,8 +2077,10 @@ export default function App() {
               alignItems: "center",
               justifyContent: "center",
               gap: "5px",
-              background: activeTab === "voice" && drawerMode === "none" ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-              color: activeTab === "voice" && drawerMode === "none" ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
+              background: activeTab === "voice" && drawerMode === "none" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
+              color: activeTab === "voice" && drawerMode === "none" ? "var(--text-tab-active)" : "var(--text-tab-inactive)",
+              border: activeTab === "voice" && drawerMode === "none" ? "1px solid var(--border-tab-active)" : "1px solid var(--border-btn-secondary)",
+              fontWeight: activeTab === "voice" && drawerMode === "none" ? "700" : "500"
             }}
           >
             <Mic size={12} />
@@ -2093,8 +2098,10 @@ export default function App() {
               alignItems: "center",
               justifyContent: "center",
               gap: "5px",
-              background: activeTab === "avatar" ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-              color: activeTab === "avatar" ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
+              background: activeTab === "avatar" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
+              color: activeTab === "avatar" ? "var(--text-tab-active)" : "var(--text-tab-inactive)",
+              border: activeTab === "avatar" ? "1px solid var(--border-tab-active)" : "1px solid var(--border-btn-secondary)",
+              fontWeight: activeTab === "avatar" ? "700" : "500"
             }}
           >
             <Video size={12} />
@@ -2112,8 +2119,10 @@ export default function App() {
               alignItems: "center",
               justifyContent: "center",
               gap: "5px",
-              background: activeTab === "theme" ? "var(--bg-btn-primary)" : "var(--bg-btn-secondary)",
-              color: activeTab === "theme" ? "var(--text-btn-primary)" : "var(--text-btn-secondary)"
+              background: activeTab === "theme" ? "var(--bg-tab-active)" : "var(--bg-tab-inactive)",
+              color: activeTab === "theme" ? "var(--text-tab-active)" : "var(--text-tab-inactive)",
+              border: activeTab === "theme" ? "1px solid var(--border-tab-active)" : "1px solid var(--border-btn-secondary)",
+              fontWeight: activeTab === "theme" ? "700" : "500"
             }}
           >
             <Sliders size={12} />
