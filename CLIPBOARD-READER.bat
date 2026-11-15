@@ -1,21 +1,20 @@
-@echo off
-title SOLID TTS CLIPBOARD READER èµ·å‹•
-chcp 65001 > nul
-cd /d "%~dp0"
-
-if exist "C:\Users\soroe\node-v22.13.1-win-x64" (
-    set "PATH=C:\Users\soroe\node-v22.13.1-win-x64;%PATH%"
-)
-
-echo ã‚¢ãƒ—ãƒªã‚±ãƒ¼ã‚·ãƒ§ãƒ³ã‚’èµ·å‹•ã—ã¦ã„ã¾ã™...
-
-:: Start Vite dev server silently using VBScript
-wscript.exe run_dev.vbs
-
-:: Wait 2 seconds for server startup
-timeout /t 2 /nobreak > nul
-
-:: Open Chrome in standalone App window with isolated profile, compact size and dark title bar
-start chrome --app="http://localhost:3005/?mode=native" --user-data-dir="%temp%\solid-tts-profile" --window-size=380,480 --force-dark-mode --enable-features=WebUIDarkMode --no-first-run --no-default-browser-check
-
-exit
+@echo off
+title SOLID TTS CLIPBOARD READER ‹N“®
+cd /d "%~dp0"
+
+if exist "C:\Users\soroe\node-v22.13.1-win-x64" (
+    set "PATH=C:\Users\soroe\node-v22.13.1-win-x64;%PATH%"
+)
+
+echo ƒAƒvƒŠƒP[ƒVƒ‡ƒ“‚ğ‹N“®‚µ‚Ä‚¢‚Ü‚·...
+
+:: ƒoƒbƒNƒOƒ‰ƒEƒ“ƒh‚Åƒ[ƒJƒ‹’ÊMƒGƒ“ƒWƒ“(server.ts)‚ğƒTƒCƒŒƒ“ƒg‹N“®
+wscript.exe run_dev.vbs
+
+:: ƒT[ƒo[‹N“®‘Ò‹@i2•bj
+timeout /t 2 /nobreak > nul
+
+:: Chrome ƒXƒ^ƒ“ƒhƒAƒ[ƒ“ PWA ƒEƒBƒ“ƒhƒE‚Å‹N“®iƒ|[ƒg 3005j
+start chrome --app="http://localhost:3005/?mode=native" --user-data-dir="%temp%\solid-tts-profile" --window-size=380,480 --force-dark-mode --enable-features=WebUIDarkMode --no-first-run --no-default-browser-check
+
+exit

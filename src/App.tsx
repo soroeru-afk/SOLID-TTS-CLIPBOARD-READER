@@ -1309,64 +1309,16 @@ export default function App() {
     setStatus("URL解析中");
 
     try {
-      let data: any = null;
-      let extractOk = false;
+      const res = await fetch("/api/extract-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed, followPages: true, maxPages: 5 }),
+        signal: controller.signal
+      });
+      const data = await res.json().catch(() => null);
 
-      // 1. ローカル抽出サーバー (/api/extract-url) を試行
-      try {
-        const res = await fetch("/api/extract-url", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: trimmed, followPages: true, maxPages: 5 }),
-          signal: controller.signal
-        });
-        if (res.ok) {
-          const resData = await res.json().catch(() => null);
-          if (resData?.ok && resData?.text) {
-            data = resData;
-            extractOk = true;
-          }
-        }
-      } catch (localErr: any) {
-        if (localErr?.name === "AbortError") throw localErr;
-        // ローカルサーバー未稼働時またはGitHub Pages静的配信時はフォールバックへ進む
-      }
-
-      // 2. GitHub Pages / 静的ホスティング用フォールバック (Jina Reader API: https://r.jina.ai/)
-      if (!extractOk) {
-        const cleanUrl = trimmed.startsWith("http://") || trimmed.startsWith("https://") ? trimmed : `https://${trimmed}`;
-        const jinaRes = await fetch(`https://r.jina.ai/${cleanUrl}`, {
-          headers: { Accept: "application/json" },
-          signal: controller.signal
-        });
-        if (jinaRes.ok) {
-          const jinaData = await jinaRes.json().catch(() => null);
-          const rawText = jinaData?.data?.content || "";
-          if (rawText) {
-            // Markdown記号や余分なリンク・画像を読み上げ用にクリーンアップ
-            const cleanedText = rawText
-              .replace(/!\[.*?\]\(.*?\)/g, "")
-              .replace(/\[(.*?)\]\(.*?\)/g, "$1")
-              .replace(/#{1,6}\s+/g, "")
-              .replace(/```[\s\S]*?```/g, "")
-              .replace(/\n{3,}/g, "\n\n")
-              .trim();
-
-            data = {
-              ok: true,
-              url: cleanUrl,
-              title: jinaData?.data?.title || "",
-              text: cleanedText,
-              pagesLoaded: 1,
-              pageBreaks: []
-            };
-            extractOk = true;
-          }
-        }
-      }
-
-      if (!extractOk || !data?.ok || !data?.text) {
-        throw new Error(data?.error || "Webページの解析に失敗しました。");
+      if (!res.ok || !data?.ok || !data?.text) {
+        throw new Error(data?.error || "Webページの解析に失敗しました。ローカル抽出サーバー（server.ts）が稼働しているかご確認ください。");
       }
 
       if (data.url) {

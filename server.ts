@@ -11,7 +11,7 @@ import iconv from "iconv-lite";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 3005);
 const isProd = process.env.NODE_ENV === "production";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB limit
