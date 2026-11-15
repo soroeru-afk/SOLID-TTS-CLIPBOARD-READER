@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2, PanelTop, ExternalLink, Layers, Mic, Sliders, RotateCcw, History, Copy, Check } from "lucide-react";
+import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2, PanelTop, ExternalLink, Layers, Mic, Sliders, RotateCcw, History, Copy, Check, Globe, Loader2, X } from "lucide-react";
 
 // Themes configuration
 const THEMES: Record<string, { label: string; headerColor: string }> = {
@@ -123,7 +123,8 @@ export interface SpeechHistoryItem {
   text: string;
   timestamp: number;
   charCount: number;
-  source: "clipboard" | "manual";
+  source: "clipboard" | "manual" | "url";
+  pageBreaks?: Record<number, number>;
 }
 const MAX_HISTORY_ITEMS = 10;
 const HISTORY_STORAGE_KEY = "solid-tts-history-v1";
@@ -154,7 +155,11 @@ export default function App() {
   const [copiedHistoryId, setCopiedHistoryId] = useState<string | null>(null);
 
   // 履歴への自動追加（同一テキスト重複は先頭に更新、最大10件維持）
-  const addToHistory = (text: string, source: "clipboard" | "manual" = "clipboard") => {
+  const addToHistory = (
+    text: string,
+    source: "clipboard" | "manual" | "url" = "clipboard",
+    breaks?: Record<number, number>
+  ) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     setHistoryList((prev) => {
@@ -164,7 +169,8 @@ export default function App() {
         text: trimmed,
         timestamp: Date.now(),
         charCount: trimmed.length,
-        source
+        source,
+        ...(breaks && Object.keys(breaks).length > 0 ? { pageBreaks: breaks } : {})
       };
       const updated = [newItem, ...filtered].slice(0, MAX_HISTORY_ITEMS);
       try {
@@ -363,9 +369,23 @@ export default function App() {
   const [status, setStatus] = useState("待機中");
   const [isPaused, setIsPaused] = useState(false);
 
+  // URL解析（Read Aloud仕様）State
+  const [urlInput, setUrlInput] = useState("");
+  const [isExtractingUrl, setIsExtractingUrl] = useState(false);
+  const [urlErrorMsg, setUrlErrorMsg] = useState<string | null>(null);
+  const [urlPageInfo, setUrlPageInfo] = useState<{ pagesLoaded: number; nextPageUrl: string | null } | null>(null);
+  const urlAbortRef = useRef<AbortController | null>(null);
+
+  // テキストプレビュー＆途中再生／ページ区切り線 State
+  const [textViewMode, setTextViewMode] = useState<"preview" | "edit">("edit");
+  const [pageBreaks, setPageBreaks] = useState<Record<number, number>>({});
+  const [activeSpeakLineIdx, setActiveSpeakLineIdx] = useState<number | null>(null);
+  const activeLineRef = useRef<HTMLButtonElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
   const ttsGeneration = useRef(0);
-  const speechQueue = useRef<string[]>([]);
-  const currentChunkText = useRef<string>("");
+  const speechQueue = useRef<{ text: string; lineIdx: number }[]>([]);
+  const currentChunkItem = useRef<{ text: string; lineIdx: number } | null>(null);
   const currentChunkCharIndex = useRef<number>(0);
 
   // 常に最新の発声設定を保持するRef（クロージャや非同期Stateラグによる先祖返りを100%防止）
@@ -597,15 +617,15 @@ export default function App() {
 
     if (isSpeakingNow) {
       // 1. 現在発声中のチャンクの未読部分をキュー先頭に復元
-      const curText = currentChunkText.current;
+      const curItem = currentChunkItem.current;
       const charIdx = currentChunkCharIndex.current;
-      if (curText) {
-        const remaining = charIdx > 0 && charIdx < curText.length ? curText.slice(charIdx).trim() : curText.trim();
+      if (curItem) {
+        const remaining = charIdx > 0 && charIdx < curItem.text.length ? curItem.text.slice(charIdx).trim() : curItem.text.trim();
         if (remaining) {
-          speechQueue.current.unshift(remaining);
+          speechQueue.current.unshift({ text: remaining, lineIdx: curItem.lineIdx });
         }
       }
-      currentChunkText.current = "";
+      currentChunkItem.current = null;
       currentChunkCharIndex.current = 0;
 
       // 音声を瞬時カット
@@ -1005,9 +1025,9 @@ export default function App() {
     }, 2000);
   };
 
-  // Text chunking for Web Speech API stability
-  const splitIntoChunks = (text: string, maxLen = 140): string[] => {
-    const sentences = text.split(/(?<=[。！？\n])/);
+  // Text chunking for Web Speech API stability (with line index tracking)
+  const splitLineIntoChunks = (lineText: string, maxLen = 140): string[] => {
+    const sentences = lineText.split(/(?<=[。！？])/);
     const chunks: string[] = [];
     let cur = "";
     sentences.forEach((s) => {
@@ -1023,8 +1043,30 @@ export default function App() {
       }
     });
     if (cur.trim()) chunks.push(cur);
-    return chunks.filter((c) => c.trim().length);
+    return chunks.filter((c) => c.trim().length > 0);
   };
+
+  const buildTrackedChunks = (text: string, startLineIdx = 0): { text: string; lineIdx: number }[] => {
+    const lines = text.split(/\r?\n/);
+    const safeStart = Math.max(0, Math.min(startLineIdx, Math.max(0, lines.length - 1)));
+    const result: { text: string; lineIdx: number }[] = [];
+    for (let i = safeStart; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (!trimmed) continue;
+      const lineChunks = splitLineIntoChunks(trimmed);
+      for (const c of lineChunks) {
+        result.push({ text: c, lineIdx: i });
+      }
+    }
+    return result;
+  };
+
+  // 読み上げ中の行が切り替わったらプレビュー内で自動追従スクロール
+  useEffect(() => {
+    if (activeSpeakLineIdx !== null && drawerMode === "text" && textViewMode === "preview" && activeLineRef.current) {
+      activeLineRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [activeSpeakLineIdx, drawerMode, textViewMode]);
 
   // Keep-Alive & Safety Watcher for Speech and Video
   useEffect(() => {
@@ -1032,6 +1074,7 @@ export default function App() {
       if (status === "再生中" && !isPaused) {
         if (!window.speechSynthesis.speaking && !speechQueue.current.length) {
           setStatus("待機中");
+          setActiveSpeakLineIdx(null);
           pauseAvatarVideo();
         } else if (window.speechSynthesis.speaking) {
           // Chrome 15s pause bug workaround
@@ -1056,17 +1099,19 @@ export default function App() {
   const playNextChunk = (gen: number) => {
     if (gen !== ttsGeneration.current) return;
     if (!speechQueue.current.length) {
-      currentChunkText.current = "";
+      currentChunkItem.current = null;
       currentChunkCharIndex.current = 0;
+      setActiveSpeakLineIdx(null);
       setStatus("待機中");
       pauseAvatarVideo(); // 読み上げキュー完了で動画自動停止！
       return;
     }
-    const chunk = speechQueue.current.shift()!;
-    currentChunkText.current = chunk;
+    const item = speechQueue.current.shift()!;
+    currentChunkItem.current = item;
     currentChunkCharIndex.current = 0;
+    setActiveSpeakLineIdx(item.lineIdx);
 
-    const utter = new SpeechSynthesisUtterance(chunk);
+    const utter = new SpeechSynthesisUtterance(item.text);
 
     // 常に最新のアクティブ設定（Ref）を参照！クロージャやState更新ラグの影響を一切受けず、最後まで確実に維持！
     const selectedVoice = activeVoiceRef.current || voices[selectedVoiceIdx];
@@ -1089,6 +1134,7 @@ export default function App() {
 
     utter.onstart = () => {
       if (gen === ttsGeneration.current) {
+        setActiveSpeakLineIdx(item.lineIdx);
         playAvatarVideo(); // 発声開始で動画再生！
       }
     };
@@ -1106,6 +1152,7 @@ export default function App() {
       }
       if (e.error === "not-allowed") {
         setStatus("ブラウザ制限(別窓推奨)");
+        setActiveSpeakLineIdx(null);
         pauseAvatarVideo();
         return;
       }
@@ -1121,9 +1168,9 @@ export default function App() {
     }
   };
 
-  const startSpeaking = (text: string) => {
+  const startSpeaking = (text: string, startLineIdx = 0) => {
     if (!text || !text.trim()) return;
-    const chunks = splitIntoChunks(text);
+    const chunks = buildTrackedChunks(text, startLineIdx);
     if (!chunks.length) return;
 
     ttsGeneration.current++;
@@ -1139,6 +1186,7 @@ export default function App() {
     } catch (e) {}
 
     speechQueue.current = chunks;
+    setActiveSpeakLineIdx(chunks[0].lineIdx);
     setStatus("再生中");
     setIsPaused(false);
 
@@ -1156,11 +1204,17 @@ export default function App() {
   };
 
   const stopSpeaking = () => {
+    if (urlAbortRef.current) {
+      urlAbortRef.current.abort();
+      urlAbortRef.current = null;
+      setIsExtractingUrl(false);
+    }
     ttsGeneration.current++;
     window.speechSynthesis.cancel();
     speechQueue.current = [];
-    currentChunkText.current = "";
+    currentChunkItem.current = null;
     currentChunkCharIndex.current = 0;
+    setActiveSpeakLineIdx(null);
     setStatus("待機中");
     setIsPaused(false);
     pauseAvatarVideo(); // 全停止で即時動画停止！
@@ -1186,15 +1240,15 @@ export default function App() {
       setStatus("一時停止中");
 
       // 現在読み上げ中のチャンクの未読部分をキュー先頭に復元
-      const curText = currentChunkText.current;
+      const curItem = currentChunkItem.current;
       const idx = currentChunkCharIndex.current;
-      if (curText) {
-        const remaining = idx > 0 && idx < curText.length ? curText.slice(idx).trim() : curText.trim();
+      if (curItem) {
+        const remaining = idx > 0 && idx < curItem.text.length ? curItem.text.slice(idx).trim() : curItem.text.trim();
         if (remaining) {
-          speechQueue.current.unshift(remaining);
+          speechQueue.current.unshift({ text: remaining, lineIdx: curItem.lineIdx });
         }
       }
-      currentChunkText.current = "";
+      currentChunkItem.current = null;
       currentChunkCharIndex.current = 0;
 
       // 世代を進めてコールバックを即時遮断し、cancel() で音声を瞬時にカット
@@ -1214,7 +1268,147 @@ export default function App() {
     }
   };
 
-  // Clipboard Reading function
+  // プレビュー行クリック：同じ読上中の行をクリックしたら停止、停止中・別行クリックでそこから最後まで再生
+  const handlePreviewLineClick = (lineIdx: number) => {
+    if (activeSpeakLineIdx === lineIdx && status === "再生中" && !isPaused) {
+      stopSpeaking();
+      return;
+    }
+    startSpeaking(textToRead, lineIdx);
+  };
+
+  // URL判定ヘルパー（単一行の http/https URL か判定）
+  const isSingleHttpUrl = (raw: string): boolean => {
+    const trimmed = raw.trim();
+    if (!trimmed || /\s/.test(trimmed)) return false;
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+      return false;
+    }
+  };
+
+  // URLをサーバー側で解析して本文のみを抽出し読み上げる（Read Aloud仕様）
+  const analyzeAndSpeakUrl = async (targetUrl: string) => {
+    const trimmed = targetUrl.trim();
+    if (!trimmed) {
+      setUrlErrorMsg("解析するURLを入力してください。");
+      return;
+    }
+
+    if (urlAbortRef.current) {
+      urlAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    urlAbortRef.current = controller;
+
+    setUrlErrorMsg(null);
+    setUrlPageInfo(null);
+    setIsExtractingUrl(true);
+    setStatus("URL解析中");
+
+    try {
+      let data: any = null;
+      let extractOk = false;
+
+      // 1. ローカル抽出サーバー (/api/extract-url) を試行
+      try {
+        const res = await fetch("/api/extract-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: trimmed, followPages: true, maxPages: 5 }),
+          signal: controller.signal
+        });
+        if (res.ok) {
+          const resData = await res.json().catch(() => null);
+          if (resData?.ok && resData?.text) {
+            data = resData;
+            extractOk = true;
+          }
+        }
+      } catch (localErr: any) {
+        if (localErr?.name === "AbortError") throw localErr;
+        // ローカルサーバー未稼働時またはGitHub Pages静的配信時はフォールバックへ進む
+      }
+
+      // 2. GitHub Pages / 静的ホスティング用フォールバック (Jina Reader API: https://r.jina.ai/)
+      if (!extractOk) {
+        const cleanUrl = trimmed.startsWith("http://") || trimmed.startsWith("https://") ? trimmed : `https://${trimmed}`;
+        const jinaRes = await fetch(`https://r.jina.ai/${cleanUrl}`, {
+          headers: { Accept: "application/json" },
+          signal: controller.signal
+        });
+        if (jinaRes.ok) {
+          const jinaData = await jinaRes.json().catch(() => null);
+          const rawText = jinaData?.data?.content || "";
+          if (rawText) {
+            // Markdown記号や余分なリンク・画像を読み上げ用にクリーンアップ
+            const cleanedText = rawText
+              .replace(/!\[.*?\]\(.*?\)/g, "")
+              .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+              .replace(/#{1,6}\s+/g, "")
+              .replace(/```[\s\S]*?```/g, "")
+              .replace(/\n{3,}/g, "\n\n")
+              .trim();
+
+            data = {
+              ok: true,
+              url: cleanUrl,
+              title: jinaData?.data?.title || "",
+              text: cleanedText,
+              pagesLoaded: 1,
+              pageBreaks: []
+            };
+            extractOk = true;
+          }
+        }
+      }
+
+      if (!extractOk || !data?.ok || !data?.text) {
+        throw new Error(data?.error || "Webページの解析に失敗しました。");
+      }
+
+      if (data.url) {
+        setUrlInput(data.url);
+      }
+      const pagesLoaded = typeof data.pagesLoaded === "number" ? data.pagesLoaded : 1;
+      const nextPageUrl = typeof data.nextPageUrl === "string" && data.nextPageUrl ? data.nextPageUrl : null;
+      if (pagesLoaded > 1 || nextPageUrl) {
+        setUrlPageInfo({ pagesLoaded, nextPageUrl });
+      } else {
+        setUrlPageInfo(null);
+      }
+
+      const nextBreaks: Record<number, number> = {};
+      if (Array.isArray(data.pageBreaks)) {
+        for (const pb of data.pageBreaks) {
+          if (typeof pb?.lineIndex === "number" && typeof pb?.pageNum === "number") {
+            nextBreaks[pb.lineIndex] = pb.pageNum;
+          }
+        }
+      }
+      setPageBreaks(nextBreaks);
+      setTextToRead(data.text);
+      setTextViewMode("preview");
+      addToHistory(data.text, "url", nextBreaks);
+      startSpeaking(data.text);
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        setStatus("待機中");
+        return;
+      }
+      setStatus("待機中");
+      setUrlErrorMsg(err?.message || "URLの読み込みに失敗しました。");
+    } finally {
+      if (urlAbortRef.current === controller) {
+        urlAbortRef.current = null;
+      }
+      setIsExtractingUrl(false);
+    }
+  };
+
+  // Clipboard Reading function（単体URLコピー時は自動解析して読み上げ）
   const readClipboard = async () => {
     try {
       if (!navigator.clipboard || !navigator.clipboard.readText) {
@@ -1225,7 +1419,17 @@ export default function App() {
         alert("クリップボードにテキストがありません。");
         return;
       }
+      if (isSingleHttpUrl(text)) {
+        const cleanUrl = text.trim();
+        setUrlInput(cleanUrl);
+        await analyzeAndSpeakUrl(cleanUrl);
+        return;
+      }
+      setUrlErrorMsg(null);
+      setUrlPageInfo(null);
+      setPageBreaks({});
       setTextToRead(text);
+      setTextViewMode("preview");
       addToHistory(text, "clipboard");
       startSpeaking(text);
     } catch (e: any) {
@@ -1510,26 +1714,133 @@ export default function App() {
 
           {/* ドロワー・ボディ（スクロール領域） */}
           <div className="slide-up-drawer-body">
-            {/* 1. 音声テキスト入力ドロワー */}
+            {/* 1. 音声テキスト入力 / クリック途中再生ドロワー */}
             {activeTab === "voice" && drawerMode === "text" && (
               <div className="text-area-container" style={{ margin: 0, height: "100%", display: "flex", flexDirection: "column", flex: 1 }}>
-                <textarea
-                  value={textToRead}
-                  onChange={(e) => setTextToRead(e.target.value)}
-                  placeholder="ここにテキストを入力するか、貼り付けてください..."
-                  className="textarea-field"
-                  style={{
-                    flex: 1,
-                    width: "100%",
-                    minHeight: "100px",
-                    height: "100%",
-                    resize: "none"
-                  }}
-                />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px", flexShrink: 0, gap: "6px" }}>
+                {/* モード切替バー（クリック途中再生 ↔ テキスト編集） */}
+                <div className="text-drawer-mode-bar">
+                  <div className="text-mode-tabs">
+                    <button
+                      type="button"
+                      onClick={() => setTextViewMode("preview")}
+                      className={`text-mode-tab ${textViewMode === "preview" ? "active" : ""}`}
+                      title="クリックした行から最後まで読み上げ（現在読上行をハイライト追従）"
+                    >
+                      <Play size={10} />
+                      <span>クリック再生</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTextViewMode("edit")}
+                      className={`text-mode-tab ${textViewMode === "edit" ? "active" : ""}`}
+                      title="テキストを直接入力・貼り付け・編集"
+                    >
+                      <Edit3 size={10} />
+                      <span>テキスト編集</span>
+                    </button>
+                  </div>
+                  <span className="text-mode-hint">
+                    {textViewMode === "preview" ? "行クリックで再生 / 同行で停止" : "直接入力・編集"}
+                  </span>
+                </div>
+
+                {textViewMode === "preview" ? (
+                  <div className="text-preview-list" role="region" aria-label="クリック途中再生プレビュー">
+                    {!textToRead.trim() ? (
+                      <div className="text-preview-empty">
+                        <div>読み上げるテキストがありません</div>
+                        <button
+                          type="button"
+                          onClick={() => setTextViewMode("edit")}
+                          className="btn-action"
+                          style={{ marginTop: "6px", fontSize: "10.5px", padding: "4px 10px" }}
+                        >
+                          テキスト入力へ切替
+                        </button>
+                      </div>
+                    ) : (
+                      (() => {
+                        const rawLines = textToRead.split(/\r?\n/);
+                        let displayNum = 0;
+                        return rawLines.map((line, lineIdx) => {
+                          const pageNum = pageBreaks[lineIdx];
+                          const trimmed = line.trim();
+                          if (!trimmed && !pageNum) return null;
+                          if (!trimmed && pageNum) {
+                            return (
+                              <div key={`pb-${lineIdx}`} className="text-page-divider">
+                                <span className="text-page-divider-line" />
+                                <span className="text-page-divider-label">{pageNum}ページ目</span>
+                                <span className="text-page-divider-line" />
+                              </div>
+                            );
+                          }
+                          displayNum++;
+                          const isSpeakingThisLine = activeSpeakLineIdx === lineIdx && status !== "待機中";
+                          return (
+                            <React.Fragment key={`line-${lineIdx}`}>
+                              {pageNum && (
+                                <div className="text-page-divider">
+                                  <span className="text-page-divider-line" />
+                                  <span className="text-page-divider-label">{pageNum}ページ目</span>
+                                  <span className="text-page-divider-line" />
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                ref={isSpeakingThisLine ? activeLineRef : undefined}
+                                onClick={() => handlePreviewLineClick(lineIdx)}
+                                className={`text-preview-line ${isSpeakingThisLine ? "is-speaking" : ""}`}
+                                title={
+                                  isSpeakingThisLine && !isPaused
+                                    ? "同じ行をもう一度クリックすると停止します"
+                                    : "クリックすると、この行から最後まで読み上げます"
+                                }
+                              >
+                                <span className="text-preview-num">
+                                  {String(displayNum).padStart(2, "0")}
+                                </span>
+                                <span className="text-preview-content">{trimmed}</span>
+                                <span className="text-preview-play-cue">
+                                  {isSpeakingThisLine ? (isPaused ? "ここから" : "読上中") : "ここから"}
+                                </span>
+                              </button>
+                            </React.Fragment>
+                          );
+                        });
+                      })()
+                    )}
+                  </div>
+                ) : (
+                  <textarea
+                    ref={textareaRef}
+                    value={textToRead}
+                    onChange={(e) => {
+                      setTextToRead(e.target.value);
+                      if (Object.keys(pageBreaks).length > 0) {
+                        setPageBreaks({});
+                      }
+                    }}
+                    placeholder="ここにテキストを入力するか、貼り付けてください..."
+                    className="textarea-field"
+                    style={{
+                      flex: 1,
+                      width: "100%",
+                      minHeight: "100px",
+                      height: "100%",
+                      resize: "none"
+                    }}
+                  />
+                )}
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px", flexShrink: 0, gap: "6px", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                     <button
-                      onClick={() => setTextToRead("")}
+                      onClick={() => {
+                        setTextToRead("");
+                        setPageBreaks({});
+                        setTextViewMode("edit");
+                      }}
                       className="btn-action"
                       disabled={!textToRead}
                       style={{ fontSize: "10px", padding: "4px 8px" }}
@@ -1544,31 +1855,50 @@ export default function App() {
                         title="過去10件の読上履歴からテキストを選ぶ"
                       >
                         <History size={10} style={{ display: "inline", verticalAlign: "middle", marginRight: "3px" }} />
-                        履歴から呼出 ({historyList.length})
+                        履歴 ({historyList.length})
                       </button>
                     )}
                   </div>
-                  <button
-                    onClick={() => {
-                      if (textToRead.trim()) {
-                        addToHistory(textToRead, "manual");
-                        startSpeaking(textToRead);
-                        closeDrawer();
-                      }
-                    }}
-                    disabled={!textToRead.trim()}
-                    className="btn-action"
-                    style={{
-                      fontSize: "10px",
-                      padding: "4px 12px",
-                      background: "var(--bg-btn-primary)",
-                      color: "var(--text-btn-primary)",
-                      fontWeight: "bold"
-                    }}
-                  >
-                    <Play size={10} style={{ display: "inline", verticalAlign: "middle", marginRight: "3px" }} />
-                    閉じて再生
-                  </button>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    {textViewMode === "edit" && textToRead.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const pos = textareaRef.current?.selectionStart ?? 0;
+                          const linesBefore = textToRead.slice(0, pos).split(/\r?\n/);
+                          const cursorLineIdx = Math.max(0, linesBefore.length - 1);
+                          setTextViewMode("preview");
+                          startSpeaking(textToRead, cursorLineIdx);
+                        }}
+                        className="btn-action"
+                        style={{ fontSize: "10px", padding: "4px 8px" }}
+                        title="テキスト欄のカーソルがある行から最後まで読み上げます"
+                      >
+                        カーソル位置から
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (textToRead.trim()) {
+                          addToHistory(textToRead, "manual", pageBreaks);
+                          startSpeaking(textToRead);
+                          closeDrawer();
+                        }
+                      }}
+                      disabled={!textToRead.trim()}
+                      className="btn-action"
+                      style={{
+                        fontSize: "10px",
+                        padding: "4px 12px",
+                        background: "var(--bg-btn-primary)",
+                        color: "var(--text-btn-primary)",
+                        fontWeight: "bold"
+                      }}
+                    >
+                      <Play size={10} style={{ display: "inline", verticalAlign: "middle", marginRight: "3px" }} />
+                      先頭から再生して閉じる
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1615,7 +1945,7 @@ export default function App() {
                             <div className="history-entry-badges">
                               <span className="history-entry-num">#{index + 1}</span>
                               <span className="history-entry-type">
-                                {item.source === "clipboard" ? "CLIPBOARD" : "MANUAL"}
+                                {item.source === "clipboard" ? "CLIPBOARD" : item.source === "url" ? "URL" : "MANUAL"}
                               </span>
                               <span className="history-entry-chars">{item.charCount}文字</span>
                               <span className="history-entry-time">{dateStr} {timeStr}</span>
@@ -1642,9 +1972,12 @@ export default function App() {
 
                           <div
                             className="history-entry-content"
-                            title="クリックでテキスト入力欄に読み込み"
+                            title="クリックでプレビューに読み込み"
                             onClick={() => {
                               setTextToRead(item.text);
+                              setPageBreaks(item.pageBreaks || {});
+                              setTextViewMode("preview");
+                              setDrawerMode("text");
                             }}
                           >
                             {item.text}
@@ -1654,18 +1987,22 @@ export default function App() {
                             <button
                               onClick={() => {
                                 setTextToRead(item.text);
-                                closeDrawer();
+                                setPageBreaks(item.pageBreaks || {});
+                                setTextViewMode("preview");
+                                setDrawerMode("text");
                               }}
                               className="history-btn-load"
-                              title="テキスト欄にセットして閉じる"
+                              title="クリック再生プレビューに読み込む"
                             >
                               <Edit3 size={11} />
-                              <span>入力欄にセット</span>
+                              <span>読込・途中再生</span>
                             </button>
                             <button
                               onClick={() => {
                                 setTextToRead(item.text);
-                                addToHistory(item.text, item.source);
+                                setPageBreaks(item.pageBreaks || {});
+                                setTextViewMode("preview");
+                                addToHistory(item.text, item.source, item.pageBreaks);
                                 startSpeaking(item.text);
                               }}
                               className="history-btn-replay"
@@ -2130,11 +2467,110 @@ export default function App() {
           </button>
         </div>
 
-        {/* クリップボード読み上げボタン（常時最前面・ワンクリック） */}
-        <button onClick={readClipboard} className="btn-primary" style={{ padding: "8px 12px" }}>
+        {/* クリップボード読み上げボタン（常時最前面・ワンクリック／URL自動解析併用） */}
+        <button onClick={readClipboard} className="btn-primary" style={{ padding: "8px 12px" }} disabled={isExtractingUrl}>
           <Clipboard size={14} />
           <span>クリップボードを読み上げる</span>
         </button>
+
+        {/* URLを解析して読み上げバー（「クリップボードを読み上げる」ボタン直下） */}
+        <div className="url-reader-row">
+          <div className="url-input-wrap">
+            <Globe size={12} className="url-input-icon" />
+            <input
+              type="url"
+              value={urlInput}
+              onChange={(e) => {
+                setUrlInput(e.target.value);
+                if (urlErrorMsg) setUrlErrorMsg(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isExtractingUrl) {
+                  e.preventDefault();
+                  analyzeAndSpeakUrl(urlInput);
+                }
+              }}
+              placeholder="https://... URLを入力"
+              className="url-input-field"
+              disabled={isExtractingUrl}
+              aria-label="解析するWebページのURL"
+            />
+            {urlInput && !isExtractingUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  setUrlInput("");
+                  setUrlErrorMsg(null);
+                  setUrlPageInfo(null);
+                }}
+                className="url-clear-btn"
+                title="URLをクリア"
+                aria-label="URLをクリア"
+              >
+                <X size={11} />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => analyzeAndSpeakUrl(urlInput)}
+            disabled={!urlInput.trim() || isExtractingUrl}
+            className="btn-url-read"
+            title="入力したURLの本文だけを抽出して読み上げます"
+          >
+            {isExtractingUrl ? (
+              <>
+                <Loader2 size={12} className="spin-icon" />
+                <span>解析中...</span>
+              </>
+            ) : (
+              <span>URLを解析して読み上げ</span>
+            )}
+          </button>
+        </div>
+
+        {urlPageInfo && !urlErrorMsg && (
+          <div className="url-page-info-banner">
+            <span>
+              {urlPageInfo.pagesLoaded}ページ分を連続抽出しました
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+              {urlPageInfo.nextPageUrl && (
+                <button
+                  type="button"
+                  onClick={() => analyzeAndSpeakUrl(urlPageInfo.nextPageUrl!)}
+                  disabled={isExtractingUrl}
+                  className="url-next-page-btn"
+                  title="残りのページ（次ページ以降）を続けて解析・読み上げます"
+                >
+                  続きのページを読む
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setUrlPageInfo(null)}
+                className="url-error-close"
+                aria-label="通知を閉じる"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {urlErrorMsg && (
+          <div className="url-error-banner" role="alert">
+            <span>{urlErrorMsg}</span>
+            <button
+              type="button"
+              onClick={() => setUrlErrorMsg(null)}
+              className="url-error-close"
+              aria-label="エラーを閉じる"
+            >
+              <X size={11} />
+            </button>
+          </div>
+        )}
 
         {/* アクションボタングループ（再生・一時停止・全停止） */}
         <div className="actions-strip" style={{ margin: "1px 0" }}>
