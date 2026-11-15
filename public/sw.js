@@ -1,5 +1,5 @@
 // Service Worker for SOLID TTS CLIPBOARD READER
-const CACHE_NAME = 'solid-tts-cache-v1';
+const CACHE_NAME = 'solid-tts-cache-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -18,8 +18,14 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Pass through non-GET requests or browser-extension requests
+  // Pass through non-GET or cross-origin requests
   if (event.request.method !== 'GET') return;
+  try {
+    const reqUrl = new URL(event.request.url);
+    if (reqUrl.origin !== self.location.origin) return;
+  } catch {
+    return;
+  }
 
   event.respondWith(
     fetch(event.request).catch(() => {

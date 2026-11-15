@@ -8,7 +8,7 @@ if exist "C:\Users\soroe\node-v22.13.1-win-x64" (
 
 echo アプリケーションを起動しています...
 
-:: バックグラウンドでローカル通信エンジン(server.ts)をサイレント起動
+:: バックグラウンドで静的Viteサーバーをサイレント起動
 wscript.exe run_dev.vbs
 
 :: サーバー起動待機（2秒）

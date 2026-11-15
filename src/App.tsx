@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Play, Square, Pause, Clipboard, Volume2, HelpCircle, ChevronDown, ChevronUp, Settings, Edit3, Palette, Video, Trash2, Eye, EyeOff, Maximize2, Minimize2, PanelTop, ExternalLink, Layers, Mic, Sliders, RotateCcw, History, Copy, Check, Globe, Loader2, X } from "lucide-react";
+import { extractUrlClientSide } from "./utils/clientUrlExtractor";
 
 // Themes configuration
 const THEMES: Record<string, { label: string; headerColor: string }> = {
@@ -1289,7 +1290,7 @@ export default function App() {
     }
   };
 
-  // URLをサーバー側で解析して本文のみを抽出し読み上げる（Read Aloud仕様）
+  // URLをクライアント側（ブラウザ内Readability＋HTML中継）で解析して本文のみを抽出し読み上げる（静的PWA完全対応）
   const analyzeAndSpeakUrl = async (targetUrl: string) => {
     const trimmed = targetUrl.trim();
     if (!trimmed) {
@@ -1309,17 +1310,11 @@ export default function App() {
     setStatus("URL解析中");
 
     try {
-      const res = await fetch("/api/extract-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmed, followPages: true, maxPages: 5 }),
+      const data = await extractUrlClientSide(trimmed, {
+        followPages: true,
+        maxPages: 5,
         signal: controller.signal
       });
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok || !data?.ok || !data?.text) {
-        throw new Error(data?.error || "Webページの解析に失敗しました。ローカル抽出サーバー（server.ts）が稼働しているかご確認ください。");
-      }
 
       if (data.url) {
         setUrlInput(data.url);
