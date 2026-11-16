@@ -1338,7 +1338,9 @@ export default function App() {
       setPageBreaks(nextBreaks);
       setTextToRead(data.text);
       setTextViewMode("preview");
-      addToHistory(data.text, "url", nextBreaks);
+      if (!data.isBotBlocked) {
+        addToHistory(data.text, "url", nextBreaks);
+      }
       startSpeaking(data.text);
     } catch (err: any) {
       if (err?.name === "AbortError") {

@@ -15,6 +15,7 @@ export interface ClientUrlExtractResult {
   pagesLoaded: number;
   nextPageUrl: string | null;
   pageBreaks: PageBreakMarker[];
+  isBotBlocked?: boolean;
 }
 
 const FETCH_TIMEOUT_MS = 14000;
@@ -131,52 +132,6 @@ function normalizeTargetUrl(rawUrl: string): string {
   return parsed.toString();
 }
 
-function normalizeCharset(raw: string | null | undefined): string {
-  if (!raw) return "utf-8";
-  const cs = raw.trim().toLowerCase().replace(/["']/g, "");
-  if (cs === "shift_jis" || cs === "shift-jis" || cs === "sjis" || cs === "x-sjis" || cs === "ms932" || cs === "windows-31j") {
-    return "shift_jis";
-  }
-  if (cs === "euc-jp" || cs === "x-euc-jp" || cs === "eucjp") {
-    return "euc-jp";
-  }
-  if (cs === "iso-2022-jp") {
-    return "iso-2022-jp";
-  }
-  return cs || "utf-8";
-}
-
-function decodeArrayBuffer(buffer: ArrayBuffer, contentType: string): string {
-  const bytes = new Uint8Array(buffer);
-  const headerMatch = contentType.match(/charset\s*=\s*([^\s;]+)/i);
-  if (headerMatch?.[1]) {
-    try {
-      return new TextDecoder(normalizeCharset(headerMatch[1])).decode(bytes);
-    } catch {
-      // fallback below
-    }
-  }
-
-  let headSample = "";
-  const sampleBytes = bytes.subarray(0, 4096);
-  for (let i = 0; i < sampleBytes.length; i++) {
-    headSample += String.fromCharCode(sampleBytes[i]);
-  }
-  const metaMatch =
-    headSample.match(/<meta[^>]+charset\s*=\s*["']?([a-zA-Z0-9._-]+)/i) ||
-    headSample.match(/<meta[^>]+content\s*=\s*["'][^"']*charset\s*=\s*([a-zA-Z0-9._-]+)/i);
-
-  if (metaMatch?.[1]) {
-    try {
-      return new TextDecoder(normalizeCharset(metaMatch[1])).decode(bytes);
-    } catch {
-      // fallback below
-    }
-  }
-
-  return new TextDecoder("utf-8").decode(bytes);
-}
-
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -205,76 +160,82 @@ async function fetchWithTimeout(
   }
 }
 
-async function fetchHtmlViaCorsProxy(
-  targetUrl: string,
-  outerSignal?: AbortSignal
-): Promise<{ html: string; isPlainText: boolean }> {
-  const attempts: Array<() => Promise<{ html: string; isPlainText: boolean } | null>> = [
-    // 1. r.jina.ai raw HTML mode (returns full HTML cleanly over CORS)
-    async () => {
-      const res = await fetchWithTimeout(
-        `https://r.jina.ai/${targetUrl}`,
-        {
-          method: "GET",
-          headers: { "X-Respond-With": "html" }
-        },
-        outerSignal
-      );
-      if (!res.ok) return null;
-      const text = await res.text();
-      if (!text || text.trim().length < 20) return null;
-      const hasHtmlTag = /<(?:!doctype|html|head|body|article|main|p|div)\b/i.test(text);
-      if (!hasHtmlTag) return null;
-      return { html: text, isPlainText: false };
-    },
-    // 2. allorigins raw relay
-    async () => {
-      const res = await fetchWithTimeout(
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-        { method: "GET" },
-        outerSignal
-      );
-      if (!res.ok) return null;
-      const ct = (res.headers.get("content-type") || "").toLowerCase();
-      const buf = await res.arrayBuffer();
-      const text = decodeArrayBuffer(buf, ct);
-      if (!text || text.trim().length < 20) return null;
-      return { html: text, isPlainText: ct.includes("text/plain") };
-    },
-    // 3. codetabs raw relay
-    async () => {
-      const res = await fetchWithTimeout(
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
-        { method: "GET" },
-        outerSignal
-      );
-      if (!res.ok) return null;
-      const ct = (res.headers.get("content-type") || "").toLowerCase();
-      const buf = await res.arrayBuffer();
-      const text = decodeArrayBuffer(buf, ct);
-      if (!text || text.trim().length < 20) return null;
-      return { html: text, isPlainText: ct.includes("text/plain") };
-    }
-  ];
+const BOT_BLOCK_ERROR_MSG =
+  "このサイトはBot対策（人間確認）によりURLから直接取得できません。記事をコピーして「クリップボードを読み上げる」をご利用ください。";
 
-  for (const attempt of attempts) {
-    if (outerSignal?.aborted) {
-      throw new DOMException("Aborted", "AbortError");
-    }
-    try {
-      const result = await attempt();
-      if (result) return result;
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError" && outerSignal?.aborted) {
-        throw err;
-      }
-      // Try next relay
+function isBotChallengeHtml(html: string): boolean {
+  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const titleText = (titleMatch?.[1] || "").replace(/\s+/g, " ").trim();
+  if (
+    /^(?:human verification|just a moment\.{0,3}|attention required!?\s*\|?\s*cloudflare|verify you are human|let'?s confirm you are human|are you a robot\??|access denied|403 forbidden|robot or human\??|ddos-guard|checking your browser)/i.test(
+      titleText
+    )
+  ) {
+    return true;
+  }
+
+  if (html.length < 30000) {
+    if (
+      /(?:captcha\.awswaf\.com|awswaf|cf-chl-opt|cf_chl_opt|\/cdn-cgi\/challenge-platform|Let's confirm you are human|Verify you are human|Checking if the site connection is secure|Enable JavaScript and cookies to continue)/i.test(
+        html
+      )
+    ) {
+      return true;
     }
   }
 
-  throw new Error(
-    "Webページの取得に失敗しました（サイト側の制限・ログイン必須・または一時的な通信エラーの可能性があります）。"
+  return false;
+}
+
+function isBotChallengeText(title: string, bodyText: string): boolean {
+  const trimmedBody = bodyText.trim();
+  const trimmedTitle = title.trim();
+  if (trimmedBody.length >= 250) return false;
+  const challengePattern =
+    /^(?:human verification|just a moment\.{0,3}|verify you are human|let'?s confirm you are human|access denied|403 forbidden|checking your browser|enable javascript and cookies)/i;
+  return challengePattern.test(trimmedBody) || challengePattern.test(trimmedTitle);
+}
+
+async function fetchHtmlViaJina(
+  targetUrl: string,
+  outerSignal?: AbortSignal
+): Promise<{ html: string; isPlainText: boolean; isBotBlocked?: boolean }> {
+  const res = await fetchWithTimeout(
+    `https://r.jina.ai/${targetUrl}`,
+    {
+      method: "GET",
+      headers: { "X-Respond-With": "html" }
+    },
+    outerSignal
   );
+
+  const text = await res.text().catch(() => "");
+
+  if (
+    res.status === 403 ||
+    res.status === 405 ||
+    res.status === 429 ||
+    res.status === 451 ||
+    (text && isBotChallengeHtml(text)) ||
+    /Target URL returned error (?:403|405|429|451)|Let's confirm you are human|Human Verification/i.test(text)
+  ) {
+    return { html: text, isPlainText: false, isBotBlocked: true };
+  }
+
+  if (!res.ok) {
+    throw new Error(`ページの取得に失敗しました (HTTP ${res.status})。`);
+  }
+
+  if (!text || text.trim().length < 20) {
+    throw new Error("ページ内容を取得できませんでした。");
+  }
+
+  const hasHtmlTag = /<(?:!doctype|html|head|body|article|main|p|div)\b/i.test(text);
+  if (!hasHtmlTag) {
+    return { html: text, isPlainText: true };
+  }
+
+  return { html: text, isPlainText: false };
 }
 
 function extractStructuredTextFromHtmlFragment(fragmentHtml: string): string {
@@ -516,7 +477,22 @@ export async function extractUrlClientSide(
   const requestedMaxPages = typeof options?.maxPages === "number" ? options.maxPages : 5;
   const maxPages = followPages ? Math.max(1, Math.min(requestedMaxPages, 5)) : 1;
 
-  const firstFetch = await fetchHtmlViaCorsProxy(targetUrl, options?.signal);
+  const firstFetch = await fetchHtmlViaJina(targetUrl, options?.signal);
+
+  if (firstFetch.isBotBlocked) {
+    return {
+      ok: true,
+      url: targetUrl,
+      title: "",
+      siteName: "",
+      text: BOT_BLOCK_ERROR_MSG,
+      charCount: BOT_BLOCK_ERROR_MSG.length,
+      pagesLoaded: 1,
+      nextPageUrl: null,
+      pageBreaks: [],
+      isBotBlocked: true
+    };
+  }
 
   if (firstFetch.isPlainText) {
     let plain = cleanTextForReadAloud(firstFetch.html);
@@ -540,6 +516,20 @@ export async function extractUrlClientSide(
   }
 
   const firstPage = extractReadablePageFromHtml(firstFetch.html, targetUrl);
+  if (isBotChallengeText(firstPage.title, firstPage.bodyText)) {
+    return {
+      ok: true,
+      url: targetUrl,
+      title: "",
+      siteName: "",
+      text: BOT_BLOCK_ERROR_MSG,
+      charCount: BOT_BLOCK_ERROR_MSG.length,
+      pagesLoaded: 1,
+      nextPageUrl: null,
+      pageBreaks: [],
+      isBotBlocked: true
+    };
+  }
   const startPageNum = getPageNumberFromUrl(new URL(targetUrl));
 
   const visited = new Set<string>([targetUrl]);
@@ -554,8 +544,8 @@ export async function extractUrlClientSide(
   while (nextPageUrl && pagesLoaded < maxPages && !visited.has(nextPageUrl)) {
     visited.add(nextPageUrl);
     try {
-      const nextFetch = await fetchHtmlViaCorsProxy(nextPageUrl, options?.signal);
-      if (nextFetch.isPlainText) break;
+      const nextFetch = await fetchHtmlViaJina(nextPageUrl, options?.signal);
+      if (nextFetch.isBotBlocked || nextFetch.isPlainText) break;
       const nextExtracted = extractReadablePageFromHtml(nextFetch.html, nextPageUrl);
       if (nextExtracted.bodyText) {
         pageBodies.push({
